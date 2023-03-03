@@ -1,5 +1,4 @@
 # coding=utf-8
-
 # Copyright (C) 2016 The Qt Company Ltd.
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
@@ -173,6 +172,9 @@ class TranslatorMessage:
 
         elif isinstance(fileName_or_ref, TranslatorMessage.Reference):
             self.addReference(fileName_or_ref.fileName(), fileName_or_ref.lineNumber())
+
+        else:
+            raise NotImplementedError
 
     def addReferenceUniq(self, fileName: str, lineNumber: int) -> None:
         if not self.m_fileName:

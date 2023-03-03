@@ -1,5 +1,4 @@
 # coding=utf-8
-
 # Copyright (C) 2016 The Qt Company Ltd.
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
@@ -168,7 +167,7 @@ class StringSimilarityMatcher:
         This class is more efficient for searching through a large array of candidate strings, since we only
         have to construct the CoMatrix for the \a stringToMatch once,
         after that we just call getSimilarityScore(strCandidate).
-        \sa getSimilarityScore
+        See also getSimilarityScore
     """
 
     def __init__(self, stringToMatch: str) -> None:
@@ -176,10 +175,10 @@ class StringSimilarityMatcher:
         self.m_length: int = len(stringToMatch)
 
     def getSimilarityScore(self, strCandidate: str) -> int:
-        cmTarget: CoMatrix = CoMatrix(strCandidate)
+        cm_target: CoMatrix = CoMatrix(strCandidate)
         delta: int = abs(self.m_length - len(strCandidate))
-        score: int = (((self.m_cm.intersection(cmTarget).worth() + 1) << 10) //
-                      (self.m_cm.reunion(cmTarget).worth() + (delta << 1) + 1))
+        score: int = (((self.m_cm.intersection(cm_target).worth() + 1) << 10) //
+                      (self.m_cm.reunion(cm_target).worth() + (delta << 1) + 1))
         return score
 
 
@@ -189,7 +188,7 @@ def getSimilarityScore(str1: str, str2: str) -> int:
         The return value is the score, and a higher score is more similar
         than one with a low score.
         Linguist considers a score over 190 to be a good match.
-        \sa StringSimilarityMatcher
+        See also StringSimilarityMatcher
     """
     return StringSimilarityMatcher(str1).getSimilarityScore(str2)
 

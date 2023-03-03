@@ -1,16 +1,17 @@
 # coding=utf-8
-
 # Copyright (C) 2016 The Qt Company Ltd.
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 import enum
+import re
 import sys
 from pathlib import Path
 from typing import BinaryIO, Callable, Final, NamedTuple, Sequence, TextIO, overload
 
-from qtpy.QtCore import QByteArray, QIODevice, QLocale
+from qtpy.QtCore import QLocale
 
 from fmt import FMT
+from numerus import getNumerusInfo
 from translatormessage import TranslatorMessage, TranslatorSaveMode
 
 
@@ -95,13 +96,16 @@ def makeMsgId(msg: TranslatorMessage) -> str:
     return id_
 
 
-def guessFormat(filename: str, fmt: str) -> str:
+def guessFormat(filename: str | Path, fmt: str = 'auto') -> str:
+    if not isinstance(filename, Path):
+        filename = Path(filename)
+
     if fmt != 'auto':
         return fmt
 
     _fmt: Translator.FileFormat
     for _fmt in Translator.registeredFileFormats():
-        if filename.casefold().endswith('.' + _fmt.extension.casefold()):
+        if filename.suffix.casefold() == '.' + _fmt.extension.casefold():
             return _fmt.extension
 
     # the default format.
@@ -193,9 +197,9 @@ class Translator:
         self.m_idMsgIdx: dict[str, int] = dict()
         self.m_msgIdx: dict[TMMKey, int] = dict()
 
-    def load(self, filename: str, cd: ConversionData, fmt: str = 'auto') -> bool:
+    def load(self, filename: str | Path, cd: ConversionData, fmt: str = 'auto') -> bool:
         cd.m_sourceDir = Path(filename).parent.absolute()
-        cd.m_sourceFileName = filename
+        cd.m_sourceFileName = str(filename)
 
         file: TextIO  # FIXME: TextIO or BinaryIO?
         try:
@@ -328,51 +332,51 @@ class Translator:
         self.insert(len(self.m_messages), msg)
 
     def appendSorted(self, msg: TranslatorMessage) -> None:
-        msgLine: int = msg.lineNumber()
-        if msgLine < 0:
+        msg_line: int = msg.lineNumber()
+        if msg_line < 0:
             self.append(msg)
             return
 
-        bestIdx: int = 0  # Best insertion point found so far
-        bestScore: int = 0  # Its category: 0 = no hit, 1 = pre or post, 2 = middle
-        bestSize: int = 0  # The length of the region. Longer is better within one category.
+        best_idx: int = 0  # Best insertion point found so far
+        best_score: int = 0  # Its category: 0 = no hit, 1 = pre or post, 2 = middle
+        best_size: int = 0  # The length of the region. Longer is better within one category.
 
         # The insertion point to use should this region turn out to be the best one so far
-        thisIdx: int = 0
-        thisScore: int = 0
-        thisSize: int = 0
+        this_idx: int = 0
+        this_score: int = 0
+        this_size: int = 0
         # Working vars
-        prevLine: int = 0
-        curIdx: int = 0
+        prev_line: int = 0
+        cur_idx: int = 0
         mit: TranslatorMessage
         for mit in self.m_messages:
-            sameFile: bool = mit.fileName() == msg.fileName() and mit.context() == msg.context()
-            curLine: int = mit.lineNumber()
-            if sameFile and curLine >= prevLine:
-                if msgLine >= prevLine and msgLine < curLine:
-                    thisIdx = curIdx
-                    thisScore = 2 if thisSize else 1
-                thisSize += 1
-                prevLine = curLine
-            elif thisSize:
-                if not thisScore:
-                    thisIdx = curIdx
-                    thisScore = 1
-                if thisScore > bestScore or (thisScore == bestScore and thisSize > bestSize):
-                    bestIdx = thisIdx
-                    bestScore = thisScore
-                    bestSize = thisSize
-                thisScore = 0
-                thisSize = 1 if sameFile else 0
-                prevLine = 0
-            curIdx += 1
-        if thisSize and not thisScore:
-            thisIdx = curIdx
-            thisScore = 1
-        if thisScore > bestScore or (thisScore == bestScore and thisSize > bestSize):
-            self.insert(thisIdx, msg)
-        elif bestScore:
-            self.insert(bestIdx, msg)
+            same_file: bool = mit.fileName() == msg.fileName() and mit.context() == msg.context()
+            cur_line: int = mit.lineNumber()
+            if same_file and cur_line >= prev_line:
+                if prev_line <= msg_line < cur_line:
+                    this_idx = cur_idx
+                    this_score = 2 if this_size else 1
+                this_size += 1
+                prev_line = cur_line
+            elif this_size:
+                if not this_score:
+                    this_idx = cur_idx
+                    this_score = 1
+                if this_score > best_score or (this_score == best_score and this_size > best_size):
+                    best_idx = this_idx
+                    best_score = this_score
+                    best_size = this_size
+                this_score = 0
+                this_size = 1 if same_file else 0
+                prev_line = 0
+            cur_idx += 1
+        if this_size and not this_score:
+            this_idx = cur_idx
+            this_score = 1
+        if this_score > best_score or (this_score == best_score and this_size > best_size):
+            self.insert(this_idx, msg)
+        elif best_score:
+            self.insert(best_idx, msg)
         else:
             self.append(msg)
 
@@ -438,8 +442,8 @@ class Translator:
             message.setTranslation('')
 
     def dropUiLines(self) -> None:
-        uiXt: Final[str] = '.ui'
-        juiXt: Final[str] = '.jui'
+        ui_xt: Final[str] = '.ui'
+        jui_xt: Final[str] = '.jui'
         message: TranslatorMessage
         for message in self.m_messages:
             have: dict[str, int] = dict()
@@ -447,7 +451,7 @@ class Translator:
             it_ref: TranslatorMessage.Reference
             for it_ref in message.allReferences():
                 fn: str = it_ref.fileName()
-                if fn.casefold().endswith(uiXt) or fn.casefold().endswith(juiXt):
+                if fn.casefold().endswith(ui_xt) or fn.casefold().endswith(jui_xt):
                     have[fn] += 1
                     if have[fn] == 1:
                         refs.append(TranslatorMessage.Reference(fn, -1))
@@ -475,40 +479,41 @@ class Translator:
 
     def resolveDuplicates(self) -> Duplicates:
         dups: Translator.Duplicates = Translator.Duplicates()
-        idRefs: set[TranslatorMessageIdPtr] = set()
-        contentRefs: set[TranslatorMessageContentPtr] = set()
+        id_refs: set[TranslatorMessageIdPtr] = set()
+        content_refs: set[TranslatorMessageContentPtr] = set()
         i: int = 0
         while i < len(self.m_messages):
             msg: TranslatorMessage = self.m_messages[i]
             omsg: TranslatorMessage = TranslatorMessage()
             oi: int = 0
-            pDup: set[int] = set()
-            gotDupe: bool = False
+            p_dup: set[int] = set()
+            got_dupe: bool = False
             if msg.id():
-                if TranslatorMessageIdPtr(self, i) in idRefs:
-                    ip: TranslatorMessageIdPtr = idRefs.intersection([TranslatorMessageIdPtr(self, i)]).pop()
+                if TranslatorMessageIdPtr(self, i) in id_refs:
+                    ip: TranslatorMessageIdPtr = id_refs.intersection([TranslatorMessageIdPtr(self, i)]).pop()
                     oi = ip.messageIndex
                     omsg = self.m_messages[oi]
-                    pDup = dups.byId
-                    gotDupe = True
-            if not gotDupe:
-                if TranslatorMessageContentPtr(self, i) in contentRefs:
-                    cp: TranslatorMessageContentPtr = contentRefs.intersection([TranslatorMessageContentPtr(self, i)]).pop()
+                    p_dup = dups.byId
+                    got_dupe = True
+            if not got_dupe:
+                if TranslatorMessageContentPtr(self, i) in content_refs:
+                    cp: TranslatorMessageContentPtr \
+                        = content_refs.intersection([TranslatorMessageContentPtr(self, i)]).pop()
                     oi = cp.messageIndex
                     omsg = self.m_messages[oi]
                     if not msg.id() or not omsg.id():
                         if msg.id() and not omsg.id():
                             omsg.setId(msg.id())
-                            idRefs.add(TranslatorMessageIdPtr(self, oi))
-                        pDup = dups.byContents
-                        gotDupe = True
-            if not gotDupe:
+                            id_refs.add(TranslatorMessageIdPtr(self, oi))
+                        p_dup = dups.byContents
+                        got_dupe = True
+            if not got_dupe:
                 if msg.id():
-                    idRefs.add(TranslatorMessageIdPtr(self, i))
-                contentRefs.add(TranslatorMessageContentPtr(self, i))
+                    id_refs.add(TranslatorMessageIdPtr(self, i))
+                content_refs.add(TranslatorMessageContentPtr(self, i))
                 i += 1
             else:
-                pDup.add(oi)
+                p_dup.add(oi)
                 if not omsg.isTranslated() and msg.isTranslated():
                     omsg.setTranslations(msg.translations())
                 self.m_indexOk = False
@@ -516,7 +521,7 @@ class Translator:
 
         return dups
 
-    def reportDuplicates(self, dupes: Duplicates, fileName: str, verbose: bool) -> None:
+    def reportDuplicates(self, dupes: Duplicates, fileName: Path, verbose: bool) -> None:
         if dupes.byId or dupes.byContents:
             sys.stderr.write(f"Warning: dropping duplicate messages in '{fileName}'")
             if not verbose:
@@ -531,9 +536,9 @@ class Translator:
                     sys.stderr.write(f'\n* Context: {msg.context()}\n* Source: {msg.sourceText()}\n')
                     if msg.comment():
                         sys.stderr.write(f'* Comment: {msg.comment()}\n')
-                    tsLine: int = msg.tsLineNumber()
-                    if tsLine >= 0:
-                        sys.stderr.write(f'* Line in .ts File: {tsLine}\n')
+                    ts_line: int = msg.tsLineNumber()
+                    if ts_line >= 0:
+                        sys.stderr.write(f'* Line in .ts File: {ts_line}\n')
                 sys.stderr.write('\n')
 
     def languageCode(self) -> str:
@@ -580,26 +585,82 @@ class Translator:
         self.m_sourceLanguage = languageCode
 
     @staticmethod
-    def guessLanguageCodeFromFileName(fileName: str) -> str:
-        pass
+    def guessLanguageCodeFromFileName(filename: str) -> str:
+        fmt: Translator.FileFormat
+        for fmt in Translator.registeredFileFormats():
+            if filename.endswith(fmt.extension):
+                filename = filename[:-len(fmt.extension)]
+                break
+        regexp: re.Pattern[str] = re.compile(r'[\\._]')
+        while True:
+            locale: QLocale = QLocale(filename)
+            # qDebug() << "LANGUAGE FROM " << filename << "LANG: " << locale.language();
+            if locale.language() != QLocale.Language.C:
+                # qDebug() << "FOUND " << locale.name();
+                return locale.name()
+            match: re.Match[str] | None = regexp.search(filename)
+            if match is None:
+                break
+            filename = filename[match.pos + 1:]
+        # qDebug() << "LANGUAGE GUESSING UNSUCCESSFUL";
+        return ''
 
     def messages(self) -> list[TranslatorMessage]:
         return self.m_messages
 
     @staticmethod
     @overload
-    def normalizedTranslations(m: TranslatorMessage, numPlurals: int) -> list[str]:
+    def normalizedTranslations(msg: TranslatorMessage, numPlurals: int) -> list[str]:
         pass
 
     def normalizeTranslations(self, cd: ConversionData) -> None:
-        pass
+        truncated: bool = False
+        lang: QLocale.Language
+        c: QLocale.Country
+        lang, c = self.languageAndTerritory(self.languageCode())
+        num_plurals: int = 1
+        if lang != QLocale.Language.C:
+            forms: list[str]
+            _, forms, _, ok = getNumerusInfo(lang, c)
+            if ok:
+                num_plurals = len(forms)  # includes singular
+        msg: TranslatorMessage
+        for msg in self.m_messages:
+            tlns: list[str] = list(msg.translations())
+            ccnt: int = num_plurals if msg.isPlural() else 1
+            if len(tlns) != ccnt:
+                if len(tlns) < ccnt:
+                    tlns.extend([''] * (ccnt - len(tlns)))
+                elif len(tlns) > ccnt:
+                    tlns = tlns[:-(len(tlns) - ccnt)]
+                    truncated = True
+                msg.setTranslations(tlns)
+        if truncated:
+            cd.appendError("Removed plural forms as the target language has less "
+                           "forms.\nIf this sounds wrong, possibly the target language is "
+                           "not set or recognized.")
 
     @overload
     def normalizedTranslations(self, m: TranslatorMessage, cd: ConversionData) -> tuple[list[str], bool]:
         pass
 
     def normalizedTranslations(*args) -> list[str] | tuple[list[str], bool]:
-        pass
+        if len(args) == 2:
+            msg: TranslatorMessage
+            num_plurals: int
+            msg, num_plurals = args
+            translations: list[str] = list(msg.translations())
+            num_translations: int = num_plurals if msg.isPlural() else 1
+
+            # make sure that the string list always have the size of the
+            # language's current numerus, or 1 if it's not plural
+            if len(translations) > num_translations:
+                translations = translations[:-(len(translations) - num_translations)]
+            elif len(translations) < num_translations:
+                translations.extend([''] * (num_translations - len(translations)))
+            return translations
+        else:
+            raise NotImplementedError  # TODO
 
     def messageCount(self) -> int:
         return len(self.m_messages)
@@ -608,7 +669,9 @@ class Translator:
         return self.m_messages[i]
     
     def dump(self) -> None:
-        pass
+        msg: TranslatorMessage
+        for msg in self.m_messages:
+            msg.dump()
     
     def setDependencies(self, dependencies: list[str]) -> None:
         self.m_dependencies = dependencies
@@ -621,14 +684,14 @@ class Translator:
     # e.g. "po-flags", "po-msgid_plural"
     ExtraData = TranslatorMessage.ExtraData
     
-    def extra(self, ba: str) -> str:
-        return self.m_extra[ba]
+    def extra(self, key: str) -> str:
+        return self.m_extra[key]
 
-    def setExtra(self, ba: str, var: str) -> None:
-        self.m_extra[ba] = var
+    def setExtra(self, key: str, value: str) -> None:
+        self.m_extra[key] = value
 
-    def hasExtra(self, ba: str) -> bool:
-        return ba in self.m_extra
+    def hasExtra(self, key: str) -> bool:
+        return key in self.m_extra
 
     def extras(self) -> ExtraData:
         return self.m_extra
@@ -691,19 +754,6 @@ class Translator:
                 self.addIndex(i, m)
 
     TMM = list[TranslatorMessage]   
-
-
-def getNumerusInfo(language: QLocale.Language, territory: QLocale.Country, rules: QByteArray,
-                   forms: list[str], gettextRules: str) -> bool:
-    pass
-
-
-def getNumerusInfoString() -> str:
-    pass
-
-
-def saveQM(translator: Translator, dev: QIODevice, cd: ConversionData) -> bool:
-    pass
 
 
 '''
