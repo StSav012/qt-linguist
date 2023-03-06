@@ -106,7 +106,7 @@ class TranslatorMessage:
         self.m_translations = translations
 
     def translation(self) -> str:
-        return self.m_translations[0]
+        return self.m_translations[0] if self.m_translations else ''
 
     def setTranslation(self, translation: str) -> None:
         self.m_translations = [translation]
