@@ -6,7 +6,7 @@ import enum
 import re
 import sys
 from pathlib import Path
-from typing import BinaryIO, Callable, Final, NamedTuple, Sequence, TextIO, overload
+from typing import BinaryIO, Callable, Final, NamedTuple, Sequence, overload
 
 from qtpy.QtCore import QLocale
 
@@ -152,8 +152,8 @@ class TranslatorMessageContentPtr(TranslatorMessagePtrBase):
 
 class Translator:
     # registration of file formats
-    SaveFunction = Callable[['Translator', TextIO | BinaryIO, ConversionData], bool]  # FIXME: TextIO or BinaryIO?
-    LoadFunction = Callable[['Translator', TextIO | BinaryIO, ConversionData], bool]  # FIXME: TextIO or BinaryIO?
+    SaveFunction = Callable[['Translator', BinaryIO, ConversionData], bool]
+    LoadFunction = Callable[['Translator', BinaryIO, ConversionData], bool]
 
     class FileFormat:
         def __init__(self):
@@ -197,15 +197,13 @@ class Translator:
         self.m_idMsgIdx: dict[str, int] = dict()
         self.m_msgIdx: dict[TMMKey, int] = dict()
 
-    def load(self, filename: str | Path, cd: ConversionData, fmt: str = 'auto') -> bool:
+    def load(self, filename: Path, cd: ConversionData, fmt: str = 'auto') -> bool:
         cd.m_sourceDir = Path(filename).parent.absolute()
         cd.m_sourceFileName = str(filename)
 
-        file: TextIO  # FIXME: TextIO or BinaryIO?
+        file: BinaryIO
         try:
-            with open(filename if (filename and filename != '-') else sys.stdin.fileno(),
-                      'r'  # FIXME: 'rt' or 'rb'?
-                      ) as file:
+            with open(filename if (filename and filename != '-') else sys.stdin.fileno(), 'rb') as file:
                 fmt_extension: str = guessFormat(filename, fmt)
 
                 f: Translator.FileFormat
@@ -221,12 +219,10 @@ class Translator:
             cd.appendError(f'Cannot open {filename}: {ex}')
         return False
 
-    def save(self, filename: str, cd: ConversionData, fmt: str = 'auto') -> bool:
-        file: TextIO  # FIXME: TextIO or BinaryIO?
+    def save(self, filename: Path, cd: ConversionData, fmt: str = 'auto') -> bool:
+        file: BinaryIO
         try:
-            with open(filename if (filename and filename != '-') else sys.stdin.fileno(),
-                      'r'  # FIXME: 'rt' or 'rb'?
-                      ) as file:
+            with open(filename if (filename and filename != '-') else sys.stdin.fileno(), 'wb') as file:
                 fmt_extension: str = guessFormat(filename, fmt)
                 cd.m_targetDir = Path(filename).parent.absolute()
 
