@@ -4,9 +4,9 @@
 
 import enum
 import sys
+import xml.dom.minidom
 import xml.etree.ElementTree as _et  # for IDE code highlighting
-from io import TextIOWrapper
-from typing import Callable, Final, cast
+from typing import BinaryIO, Callable, Final, cast
 
 from translator import ConversionData, Translator
 from translatormessage import TranslatorMessage
@@ -101,7 +101,7 @@ class TS:
         self.m_cd: ConversionData = cd
 
     # the "real thing"
-    def read(self, dev: TextIOWrapper, translator: Translator) -> bool:
+    def read(self, dev: BinaryIO, translator: Translator) -> bool:
         current_line: dict[str, int] = dict()
         current_file: str = ''
         maybe_relative: bool = False
@@ -155,6 +155,8 @@ class TS:
                 if tag.tag == TS.Tags.dependency:
                     # <dependency>
                     deps.append(tag.get(TS.Attributes.catalog))
+                else:
+                    report_unexpected_tag(tag)
             return deps
 
         def readTS(ts: ElementWithLocation) -> None:
@@ -311,16 +313,120 @@ class TS:
             return False
         return True
     
-    def write(self, dev: TextIOWrapper, translator: Translator) -> bool:
-        raise NotImplementedError
+    def write(self, dev: BinaryIO, translator: Translator) -> bool:
+        def make_xml_doc() -> xml.dom.minidom.Document:
+            doc: xml.dom.minidom.Document = xml.dom.minidom.Document()
+
+            def new_element(tag_name: str, text: str = '', **attrs: str) -> xml.dom.minidom.Element:
+                element: xml.dom.minidom.Element = doc.createElement(tag_name)
+                if text:
+                    element.appendChild(doc.createTextNode(text))
+                key: str
+                value: str
+                for key, value in attrs.items():
+                    if value:
+                        element.setAttribute(key, value)
+                return element
+
+            doc.appendChild(xml.dom.minidom.DocumentType(TS.Tags.TS))
+            root: xml.dom.minidom.Element = new_element(
+                TS.Tags.TS,
+                **{TS.Attributes.version: "2.1",
+                   TS.Attributes.language: translator.languageCode(),
+                   TS.Attributes.source_language: translator.sourceLanguageCode()})
+            messages: dict[str, list[TranslatorMessage]] = {}
+            msg: TranslatorMessage
+            for msg in translator.messages():
+                if msg.context() not in messages:
+                    messages[msg.context()] = [msg]
+                else:
+                    messages[msg.context()].append(msg)
+
+            ctx: str
+            for ctx in messages:
+                context: xml.dom.minidom.Element = doc.createElement(TS.Tags.context)
+                context.appendChild(new_element(TS.Tags.name, ctx))
+                for msg in messages[ctx]:
+                    message: xml.dom.minidom.Element = new_element(TS.Tags.message, **{TS.Attributes.id: msg.id()})
+                    for ref in msg.allReferences():
+                        message.appendChild(new_element(TS.Tags.location,
+                                                        **{TS.Attributes.filename: ref.fileName(),
+                                                           TS.Attributes.line: str(ref.lineNumber())}))
+                    if msg.sourceText():
+                        message.appendChild(new_element(TS.Tags.source, msg.sourceText()))
+                    if msg.oldSourceText():
+                        message.appendChild(new_element(TS.Tags.old_source, msg.oldSourceText()))
+                    if msg.isPlural() and msg.translations():
+                        translation: xml.dom.minidom.Element = new_element(TS.Tags.translation)
+                        translation_type: str = ''
+                        if msg.type() == TranslatorMessage.Type.Unfinished:
+                            translation_type = TS.Values.unfinished
+                        elif msg.type() == TranslatorMessage.Type.Vanished:
+                            translation_type = TS.Values.vanished
+                        elif msg.type() == TranslatorMessage.Type.Obsolete:
+                            translation_type = TS.Values.obsolete
+                        numerus_form: str
+                        for numerus_form in msg.translations():
+                            translation.appendChild(new_element(TS.Tags.numerus_form, numerus_form,
+                                                                **{TS.Attributes.type: translation_type}))
+                        message.appendChild(translation)
+                    else:
+                        translation_type: str = ''
+                        if msg.type() == TranslatorMessage.Type.Unfinished:
+                            translation_type = TS.Values.unfinished
+                        elif msg.type() == TranslatorMessage.Type.Vanished:
+                            translation_type = TS.Values.vanished
+                        elif msg.type() == TranslatorMessage.Type.Obsolete:
+                            translation_type = TS.Values.obsolete
+                        message.appendChild(new_element(TS.Tags.translation, msg.translation(),
+                                                        **{TS.Attributes.type: translation_type}))
+                    if msg.comment():
+                        message.appendChild(new_element(TS.Tags.comment, msg.comment()))
+                    if msg.oldComment():
+                        message.appendChild(new_element(TS.Tags.old_comment, msg.oldComment()))
+                    if msg.userData():
+                        message.appendChild(new_element(TS.Tags.userdata, msg.userData()))
+                    if msg.extraComment():
+                        message.appendChild(new_element(TS.Tags.extra_comment, msg.extraComment()))
+                    if msg.translatorComment():
+                        message.appendChild(new_element(TS.Tags.translator_comment, msg.translatorComment()))
+                    if msg.extras():
+                        me: str
+                        for me in msg.extras():
+                            message.appendChild(new_element(TS.prefix_extra + me, msg.extra(me)))
+                    context.appendChild(message)
+                root.appendChild(context)
+
+            if translator.dependencies():
+                dependencies: xml.dom.minidom.Element = doc.createElement(TS.Tags.dependencies)
+                dep: str
+                for dep in translator.dependencies():
+                    dependencies.appendChild(new_element(TS.Tags.dependency, **{TS.Attributes.catalog: dep}))
+                root.appendChild(dependencies)
+
+            if translator.extras():
+                te: str
+                for te in translator.extras():
+                    root.appendChild(new_element(TS.prefix_extra + te, translator.extra(te)))
+
+            doc.appendChild(root)
+
+            return doc
+
+        try:
+            dev.write(make_xml_doc().toprettyxml(encoding='utf-8'))
+        except Exception as ex:
+            self.m_cd.appendError(str(ex))
+            return False
+        return True
 
 
-def saveTS(translator: Translator, dev: TextIOWrapper, cd: ConversionData) -> bool:
+def saveTS(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
     ts: TS = TS(cd)
     return ts.write(dev, translator)
 
 
-def loadTS(translator: Translator, dev: TextIOWrapper, cd: ConversionData) -> bool:
+def loadTS(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
     ts: TS = TS(cd)
     return ts.read(dev, translator)
 
