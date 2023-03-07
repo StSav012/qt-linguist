@@ -349,10 +349,18 @@ class TS:
                 context.appendChild(new_element(TS.Tags.name, ctx))
                 for msg in messages[ctx]:
                     message: xml.dom.minidom.Element = new_element(TS.Tags.message, **{TS.Attributes.id: msg.id()})
-                    for ref in msg.allReferences():
-                        message.appendChild(new_element(TS.Tags.location,
-                                                        **{TS.Attributes.filename: ref.fileName(),
-                                                           TS.Attributes.line: str(ref.lineNumber())}))
+                    if translator.locationsType() == Translator.LocationsType.RelativeLocations:
+                        for ref in msg.allReferences():
+                            message.appendChild(new_element(
+                                TS.Tags.location,
+                                **{TS.Attributes.filename: str(ref.fileName().relative_to(Path.cwd())),
+                                   TS.Attributes.line: str(ref.lineNumber())}))
+                    elif translator.locationsType() != Translator.LocationsType.NoLocations:
+                        for ref in msg.allReferences():
+                            message.appendChild(new_element(
+                                TS.Tags.location,
+                                **{TS.Attributes.filename: str(ref.fileName()),
+                                   TS.Attributes.line: str(ref.lineNumber())}))
                     if msg.sourceText():
                         message.appendChild(new_element(TS.Tags.source, msg.sourceText()))
                     if msg.oldSourceText():
