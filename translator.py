@@ -441,12 +441,12 @@ class Translator:
         jui_xt: Final[str] = '.jui'
         message: TranslatorMessage
         for message in self.m_messages:
-            have: dict[str, int] = dict()
+            have: dict[Path, int] = dict()
             refs: TranslatorMessage.References = []
             it_ref: TranslatorMessage.Reference
             for it_ref in message.allReferences():
-                fn: str = it_ref.fileName()
-                if fn.casefold().endswith(ui_xt) or fn.casefold().endswith(jui_xt):
+                fn: Path = it_ref.fileName()
+                if fn.suffix.casefold() in (ui_xt, jui_xt):
                     have[fn] += 1
                     if have[fn] == 1:
                         refs.append(TranslatorMessage.Reference(fn, -1))
@@ -462,7 +462,7 @@ class Translator:
             msg.clearReferences()
             ref: TranslatorMessage.Reference
             for ref in refs:
-                msg.addReference(str(originalPath / Path(ref.fileName())), ref.lineNumber())
+                msg.addReference(originalPath / Path(ref.fileName()), ref.lineNumber())
 
     def translationsExist(self) -> bool:
         message: TranslatorMessage

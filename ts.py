@@ -6,6 +6,7 @@ import enum
 import sys
 import xml.dom.minidom
 import xml.etree.ElementTree as _et  # for IDE code highlighting
+from pathlib import Path
 from typing import BinaryIO, Callable, Final, cast
 
 from translator import ConversionData, Translator
@@ -205,7 +206,7 @@ class TS:
                             current_msg_file = file_name
                         lin: str = location.get(TS.Attributes.line)
                         if not lin:
-                            refs.append(TranslatorMessage.Reference(file_name, -1))
+                            refs.append(TranslatorMessage.Reference(Path(file_name), -1))
                         else:
                             try:
                                 line_no: int = int(lin)
@@ -216,7 +217,7 @@ class TS:
                                     current_line[file_name] = current_line.get(file_name, 0) + line_no
                                     line_no = current_line[file_name]
                                     maybe_relative = True
-                                refs.append(TranslatorMessage.Reference(file_name, line_no))
+                                refs.append(TranslatorMessage.Reference(Path(file_name), line_no))
                         readContents(location)
 
                     refs: TranslatorMessage.References = []

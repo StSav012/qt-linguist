@@ -4,6 +4,7 @@
 
 import enum
 import logging
+from pathlib import Path
 from typing import Sequence, overload
 
 
@@ -22,15 +23,15 @@ class TranslatorMessage:
     ExtraData = dict[str, str]
 
     class Reference:
-        def __init__(self, name: str, line_number: int) -> None:
-            self.m_fileName: str = name
+        def __init__(self, name: Path, line_number: int) -> None:
+            self._file_name: Path = name
             self.m_lineNumber = line_number
 
         def __eq__(self, other: 'TranslatorMessage.Reference') -> bool:
             return self.fileName() == other.fileName() and self.lineNumber() == other.lineNumber()
 
-        def fileName(self) -> str:
-            return self.m_fileName
+        def fileName(self) -> Path:
+            return self._file_name
 
         def lineNumber(self) -> int:
             return self.m_lineNumber
@@ -39,7 +40,7 @@ class TranslatorMessage:
 
     def __init__(self, context: str = '', sourceText: str = '',
                  comment: str = '', userData: str = '',
-                 fileName: str = '', lineNumber: int = -1,
+                 fileName: Path | None = None, lineNumber: int = -1,
                  translations: Sequence[str] = (),
                  type_: Type = Type.Unfinished, plural: bool = False) -> None:
         self.m_id: str = ''
@@ -54,7 +55,7 @@ class TranslatorMessage:
         self.m_translatorComment: str = ''
         self.m_warning: str = ''
         self.m_translations: Sequence[str] = translations
-        self.m_fileName: str = fileName
+        self.m_fileName: Path | None = fileName
         self.m_lineNumber: int = lineNumber
         self.m_tsLineNumber: int = -1
         self.m_extraRefs: TranslatorMessage.References = []
@@ -120,10 +121,10 @@ class TranslatorMessage:
                 return True
         return False
 
-    def fileName(self) -> str:
+    def fileName(self) -> Path | None:
         return self.m_fileName
 
-    def setFileName(self, fileName: str) -> None:
+    def setFileName(self, fileName: Path) -> None:
         self.m_fileName = fileName
 
     def lineNumber(self) -> int:
@@ -139,7 +140,7 @@ class TranslatorMessage:
         self.m_tsLineNumber = tsLineNumber
 
     def clearReferences(self) -> None:
-        self.m_fileName = ''
+        self.m_fileName = None
         self.m_lineNumber = -1
         self.m_extraRefs.clear()
 
@@ -154,16 +155,16 @@ class TranslatorMessage:
             self.clearReferences()
 
     @overload
-    def addReference(self, fileName: str, lineNumber: int) -> None:
+    def addReference(self, fileName: Path, lineNumber: int) -> None:
         pass
 
     @overload
     def addReference(self, ref: Reference) -> None:
         pass
 
-    def addReference(self, fileName_or_ref: str | Reference,
+    def addReference(self, fileName_or_ref: Path | Reference,
                      lineNumber: int | None = None) -> None:
-        if isinstance(fileName_or_ref, str) and lineNumber is not None:
+        if isinstance(fileName_or_ref, Path) and lineNumber is not None:
             if not self.m_fileName:
                 self.m_fileName = fileName_or_ref
                 self.m_lineNumber = lineNumber
@@ -176,8 +177,8 @@ class TranslatorMessage:
         else:
             raise NotImplementedError
 
-    def addReferenceUniq(self, fileName: str, lineNumber: int) -> None:
-        if not self.m_fileName:
+    def addReferenceUniq(self, fileName: Path, lineNumber: int) -> None:
+        if self.m_fileName is None:
             self.m_fileName = fileName
             self.m_lineNumber = lineNumber
         else:
@@ -193,7 +194,7 @@ class TranslatorMessage:
         return self.m_extraRefs
 
     def allReferences(self) -> References:
-        if self.m_fileName:
+        if self.m_fileName is not None:
             return [TranslatorMessage.Reference(self.m_fileName, self.m_lineNumber), *self.m_extraRefs]
         return []
 
@@ -273,7 +274,7 @@ class TranslatorMessage:
             f'\nExtraComment      : {self.m_extraComment}'
             f'\nTranslatorComment : {self.m_translatorComment}'
             f'\nTranslations      : {self.m_translations}'
-            f'\nFileName          : {self.m_fileName}'
+            f'\nFileName          : {self.m_fileName!s}'
             f'\nLineNumber        : {self.m_lineNumber}'
             f'\nType              : {self.m_type}'
             f'\nPlural            : {self.m_plural}'
