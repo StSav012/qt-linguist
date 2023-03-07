@@ -605,9 +605,17 @@ class Translator:
         return self.m_messages
 
     @staticmethod
-    @overload
     def normalizedTranslations(msg: TranslatorMessage, numPlurals: int) -> list[str]:
-        pass
+        translations: list[str] = list(msg.translations())
+        num_translations: int = numPlurals if msg.isPlural() else 1
+
+        # make sure that the string list always have the size of the
+        # language's current numerus, or 1 if it's not plural
+        if len(translations) > num_translations:
+            translations = translations[:-(len(translations) - num_translations)]
+        elif len(translations) < num_translations:
+            translations.extend([''] * (num_translations - len(translations)))
+        return translations
 
     def normalizeTranslations(self, cd: ConversionData) -> None:
         truncated: bool = False
@@ -635,28 +643,6 @@ class Translator:
             cd.appendError("Removed plural forms as the target language has less "
                            "forms.\nIf this sounds wrong, possibly the target language is "
                            "not set or recognized.")
-
-    @overload
-    def normalizedTranslations(self, m: TranslatorMessage, cd: ConversionData) -> tuple[list[str], bool]:
-        pass
-
-    def normalizedTranslations(*args) -> list[str] | tuple[list[str], bool]:
-        if len(args) == 2:
-            msg: TranslatorMessage
-            num_plurals: int
-            msg, num_plurals = args
-            translations: list[str] = list(msg.translations())
-            num_translations: int = num_plurals if msg.isPlural() else 1
-
-            # make sure that the string list always have the size of the
-            # language's current numerus, or 1 if it's not plural
-            if len(translations) > num_translations:
-                translations = translations[:-(len(translations) - num_translations)]
-            elif len(translations) < num_translations:
-                translations.extend([''] * (num_translations - len(translations)))
-            return translations
-        else:
-            raise NotImplementedError  # TODO
 
     def messageCount(self) -> int:
         return len(self.m_messages)
