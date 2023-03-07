@@ -25,7 +25,7 @@ class TranslatorMessage:
     class Reference:
         def __init__(self, name: Path, line_number: int) -> None:
             self._file_name: Path = name
-            self.m_lineNumber = line_number
+            self._line_number: int = line_number
 
         def __eq__(self, other: 'TranslatorMessage.Reference') -> bool:
             return self.fileName() == other.fileName() and self.lineNumber() == other.lineNumber()
@@ -34,7 +34,7 @@ class TranslatorMessage:
             return self._file_name
 
         def lineNumber(self) -> int:
-            return self.m_lineNumber
+            return self._line_number
 
     References = list[Reference]
 
