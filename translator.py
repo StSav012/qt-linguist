@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only WITH Qt-GPL-exception-1.0
 
 import enum
-import re
 import sys
 from pathlib import Path
 from typing import BinaryIO, Callable, Final, NamedTuple, Sequence, overload
@@ -581,23 +580,24 @@ class Translator:
         self.m_sourceLanguage = languageCode
 
     @staticmethod
-    def guessLanguageCodeFromFileName(filename: str) -> str:
+    def guessLanguageCodeFromFileName(filename: Path) -> str:
         fmt: Translator.FileFormat
         for fmt in Translator.registeredFileFormats():
-            if filename.endswith(fmt.extension):
-                filename = filename[:-len(fmt.extension)]
+            if filename.suffix.casefold() == fmt.extension.casefold():
+                filename = filename.with_suffix('')
                 break
-        regexp: re.Pattern[str] = re.compile(r'[\\._]')
-        while True:
-            locale: QLocale = QLocale(filename)
+        while filename.name:
+            locale: QLocale = QLocale(filename.name)
             # qDebug() << "LANGUAGE FROM " << filename << "LANG: " << locale.language();
             if locale.language() != QLocale.Language.C:
                 # qDebug() << "FOUND " << locale.name();
                 return locale.name()
-            match: re.Match[str] | None = regexp.search(filename)
-            if match is None:
+            if filename.suffix:
+                filename = filename.with_suffix('')
+            elif '_' in filename.name:
+                filename = filename.with_name(filename.name[:filename.name.index('_')])
+            else:
                 break
-            filename = filename[match.pos + 1:]
         # qDebug() << "LANGUAGE GUESSING UNSUCCESSFUL";
         return ''
 
