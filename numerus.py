@@ -325,7 +325,7 @@ numerusTable: Final[list[NumerusTableEntry]] = [
 def getNumerusInfo(language: QLocale.Language, country: QLocale.Country) -> tuple[bytes, list[str], str, bool]:
     rules: bytes = b''
     forms: list[str] = []
-    gettextRules: str = ''
+    gettext_rules: str = ''
     while True:
         entry: NumerusTableEntry
         for entry in numerusTable:
@@ -335,9 +335,9 @@ def getNumerusInfo(language: QLocale.Language, country: QLocale.Country) -> tupl
                         and ((not entry.countries and country == QLocale.Country.AnyCountry)
                              or (entry.countries and entry.countries[j] == country))):
                     rules = entry.rules
-                    gettextRules = entry.gettextRules
+                    gettext_rules = entry.gettextRules
                     forms = list(entry.forms)
-                    return rules, forms, gettextRules, True
+                    return rules, forms, gettext_rules, True
 
         if country == QLocale.Country.AnyCountry:
             break
