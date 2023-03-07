@@ -39,7 +39,7 @@ class TranslatorMessage:
     References = list[Reference]
 
     def __init__(self, context: str = '', sourceText: str = '',
-                 comment: str = '', userData: str = '',
+                 comment: str | None = '', userData: str = '',
                  fileName: Path | None = None, lineNumber: int = -1,
                  translations: Sequence[str] = (),
                  type_: Type = Type.Unfinished, plural: bool = False) -> None:
@@ -47,7 +47,7 @@ class TranslatorMessage:
         self.m_context: str = context
         self.m_sourcetext: str = sourceText
         self.m_oldsourcetext: str = ''
-        self.m_comment: str = comment
+        self.m_comment: str = comment or ''
         self.m_oldcomment: str = ''
         self.m_userData: str = userData
         self.m_extra: TranslatorMessage.ExtraData = dict()  # PO flags, PO plurals
