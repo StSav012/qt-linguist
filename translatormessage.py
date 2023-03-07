@@ -264,6 +264,10 @@ class TranslatorMessage:
     def setWarningOnly(self, isWarningOnly: bool) -> None:
         self.m_warningOnly = isWarningOnly
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(id={self.m_id!r}, context={self.m_context!r}, ' \
+               f'source={self.m_sourcetext!r}, filename={self.m_fileName!s}, line={self.m_lineNumber})'
+
     def dump(self) -> None:
         logging.debug(
             f'\nId                : {self.m_id}'
