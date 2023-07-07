@@ -181,7 +181,7 @@ def find_translation_calls(filename: Path, base_path: Path) -> Iterator[Translat
                 """
                 _translate = QCoreApplication.translate
                 """
-                target: Any = item.targets[0]
+                target: Any = item.targets[0] if isinstance(item, ast.Assign) else item.target
                 if isinstance(item.value, ast.Attribute) and isinstance(target, ast.Name):
                     r_value: ast.Attribute = item.value
                     if r_value.attr == 'translate':
