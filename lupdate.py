@@ -172,7 +172,8 @@ def find_translation_calls(filename: Path, base_path: Path) -> Iterator[Translat
                         import_qt_gui_as.add(if_name.asname or if_name.name)
                     if if_name.name == 'QtWidgets':
                         import_qt_widgets_as.add(if_name.asname or if_name.name)
-                if item.module.endswith('.QtCore'):
+                # item.module is None when `from . import ...`
+                if item.module is not None and item.module.endswith('.QtCore'):
                     for if_name in item.names:
                         if (if_name.asname or if_name.name) in ('QCoreApplication', 'QGuiApplication', 'QApplication'):
                             import_qt_core_application_as.add(if_name.asname or if_name.name)
