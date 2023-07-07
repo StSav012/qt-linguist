@@ -55,7 +55,7 @@ def list_files(path: Path, recursive: bool = True, *, suffix: str | Sequence[str
     return []
 
 
-def find_translation_calls(filename: Path) -> Iterator[TranslatorMessage]:
+def find_translation_calls(filename: Path, base_path: Path) -> Iterator[TranslatorMessage]:
     m: ast.Module = ast.parse(source=filename.read_text(), filename=str(filename))
 
     import_translate_as: set[str] = set()
@@ -66,9 +66,21 @@ def find_translation_calls(filename: Path) -> Iterator[TranslatorMessage]:
 
     def message_from_translate_call(line: int, context: str, sourceText: str,
                                     disambiguation: str | None = None, n: int = -1) -> TranslatorMessage:
+        def relative_path(_path: Path, _base_path: Path) -> Path:
+            while not _base_path.is_dir():
+                _base_path = _base_path.parent
+                if _base_path.parent.samefile(_base_path):
+                    raise RuntimeError('Cannot reach a valid directory')
+            _path_parts = list(_path.absolute().parts)
+            _base_path_parts = list(_base_path.absolute().parts)
+            while _path_parts[0] == _base_path_parts[0]:
+                del _path_parts[0]
+                del _base_path_parts[0]
+            return Path(*(['..'] * len(_base_path_parts)), *_path_parts)
+
         msg: TranslatorMessage = TranslatorMessage(context=context, sourceText=sourceText,
                                                    comment=disambiguation, plural=(n != -1),
-                                                   fileName=filename, lineNumber=line)
+                                                   fileName=relative_path(filename, base_path), lineNumber=line)
         return msg
 
     def check_expression(operator: ast.expr, class_name: str = '') -> Iterator[TranslatorMessage]:
@@ -328,8 +340,9 @@ Default is absolute for new files.''')
     init_messages: list[TranslatorMessage] = tor.messages().copy()
     current_messages: list[TranslatorMessage] = []
     new_messages: list[TranslatorMessage] = []
+    ts_path: Path = args.ts.parent.absolute()
     for fn in sources:
-        current_messages.extend(find_translation_calls(fn))
+        current_messages.extend(find_translation_calls(fn.absolute(), base_path=ts_path))
 
     new_references: dict[tuple[str, str, str], TranslatorMessage.References] = {}
 
