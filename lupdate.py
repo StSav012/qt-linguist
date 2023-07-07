@@ -24,11 +24,11 @@ except ImportError:
 
 
 def printOut(out: str) -> None:
-    sys.stdout.write(out)
+    sys.stdout.write(out + '\n')
 
 
 def printErr(out: str) -> None:
-    sys.stderr.write(out)
+    sys.stderr.write(out + '\n')
 
 
 def list_files(path: Path, recursive: bool = True, *, suffix: str | Sequence[str] = '') -> list[Path]:
