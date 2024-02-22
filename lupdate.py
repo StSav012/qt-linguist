@@ -18,9 +18,14 @@ from translator import ConversionData, Translator
 from translatormessage import TranslatorMessage
 
 try:
-    import ts
+    from ts import initTS
 except ImportError:
-    pass
+
+    def initTS() -> None:
+        return None
+
+else:
+    initTS()
 
 
 def printOut(out: str) -> None:

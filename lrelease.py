@@ -19,10 +19,24 @@ from translator import ConversionData, Translator
 from translatormessage import TranslatorSaveMode
 
 try:
-    import ts
-    import qm
+    from ts import initTS
 except ImportError:
-    pass
+
+    def initTS() -> None:
+        return None
+
+else:
+    initTS()
+
+try:
+    from qm import initQM
+except ImportError:
+
+    def initQM() -> None:
+        return None
+
+else:
+    initQM()
 
 
 def printOut(out: str) -> None:
