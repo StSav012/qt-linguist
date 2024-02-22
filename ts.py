@@ -4,12 +4,16 @@
 
 from __future__ import annotations
 
-import enum
 import sys
 import xml.dom.minidom
 import xml.etree.ElementTree as _et  # for IDE code highlighting
 from pathlib import Path
-from typing import BinaryIO, Callable, Final, cast
+from typing import BinaryIO, Final, cast
+
+try:
+    from enum import StrEnum
+except ImportError:  # `StrEnum` appears in Python 3.11
+    StrEnum = object
 
 from translator import ConversionData, Translator
 from translatormessage import TranslatorMessage
