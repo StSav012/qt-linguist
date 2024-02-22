@@ -458,4 +458,5 @@ def initTS() -> None:
     Translator.registerFileFormat(fmt)
 
 
-initTS()
+if __name__ == "__main__":
+    initTS()

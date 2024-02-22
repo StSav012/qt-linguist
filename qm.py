@@ -459,4 +459,5 @@ def initQM() -> None:
     Translator.registerFileFormat(fmt)
 
 
-initQM()
+if __name__ == "__main__":
+    initQM()
