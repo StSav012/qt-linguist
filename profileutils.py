@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def isProOrPriFile(filePath: Path) -> bool:
-    return filePath.suffix.casefold() in ('.pro', '.pri')
+    return filePath.suffix.casefold() in (".pro", ".pri")
 
 
 def extractProFiles(files: list[Path]) -> list[Path]:

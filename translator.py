@@ -4,27 +4,27 @@
 
 from __future__ import annotations
 
-import enum
 import sys
+from enum import Enum, auto
 from pathlib import Path
-from typing import BinaryIO, Callable, Final, NamedTuple, Sequence, overload
+from typing import Any, BinaryIO, Callable, Final, NamedTuple, Sequence, overload
 
 from qtpy.QtCore import QLocale
 
-from fmt import FMT
+from fmt import FMT, QString
 from numerus import getNumerusInfo
 from translatormessage import TranslatorMessage, TranslatorSaveMode
 
 
-# A struct of "interesting" data passed to and from the load and save routines
+# A struct of “interesting” data passed to and from the load and save routines
 class ConversionData:
     def __init__(self) -> None:
-        self.m_defaultContext: str = ''
+        self.m_defaultContext: str = ""
         self.m_sourceIsUtf16: bool = False  # CPP & JAVA specific
-        self.m_unTrPrefix: str = ''  # QM specific
-        self.m_sourceFileName: str = ''
-        self.m_targetFileName: str = ''
-        self.m_compilationDatabaseDir: str = ''
+        self.m_unTrPrefix: str = ""  # QM specific
+        self.m_sourceFileName: str = ""
+        self.m_targetFileName: str = ""
+        self.m_compilationDatabaseDir: str = ""
         self.m_excludes: list[str] = []
         self.m_sourceDir: Path | None = None
         self.m_targetDir: Path | None = None  # FIXME: TS specific
@@ -46,7 +46,7 @@ class ConversionData:
     def dropTags(self) -> Sequence[str]:
         return self.m_dropTags
 
-    def targetDir(self) -> Path:
+    def targetDir(self) -> Path | None:
         return self.m_targetDir
 
     def isVerbose(self) -> bool:
@@ -63,8 +63,8 @@ class ConversionData:
 
     def error(self) -> str:
         if self.m_errors:
-            return '\n'.join(self.m_errors) + '\n'
-        return ''
+            return "\n".join(self.m_errors) + "\n"
+        return ""
 
     def errors(self) -> Sequence[str]:
         return self.m_errors
@@ -79,44 +79,50 @@ class TMMKey:
         self.source = msg.sourceText()
         self.comment = msg.comment()
 
-    def __eq__(self, other: 'TMMKey') -> bool:
-        return self.context == other.context and self.source == other.source and self.comment == other.comment
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TMMKey):
+            return (
+                self.context == other.context
+                and self.source == other.source
+                and self.comment == other.comment
+            )
+        return NotImplemented
 
     def __hash__(self) -> int:
         return hash(self.context) ^ hash(self.source) ^ hash(self.comment)
 
 
 def elidedId(id_: str, length: int) -> str:
-    return id_ if len(id_) <= length else id_[:length - 5] + '[...]'
+    return id_ if len(id_) <= length else id_[: length - 5] + "[...]"
 
 
 def makeMsgId(msg: TranslatorMessage) -> str:
-    id_: str = msg.context() + '//' + elidedId(msg.sourceText(), 100)
+    id_: str = msg.context() + "//" + elidedId(msg.sourceText(), 100)
     if msg.comment():
-        id_ += '//' + elidedId(msg.comment(), 30)
+        id_ += "//" + elidedId(msg.comment(), 30)
     return id_
 
 
-def guessFormat(filename: str | Path, fmt: str = 'auto') -> str:
+def guessFormat(filename: str | Path, fmt: str = "auto") -> str:
     if not isinstance(filename, Path):
         filename = Path(filename)
 
-    if fmt != 'auto':
+    if fmt != "auto":
         return fmt
 
     _fmt: Translator.FileFormat
     for _fmt in Translator.registeredFileFormats():
-        if filename.suffix.casefold() == '.' + _fmt.extension.casefold():
+        if filename.suffix.casefold() == "." + _fmt.extension.casefold():
             return _fmt.extension
 
     # the default format.
     # FIXME: change to something more widely distributed later.
-    return 'ts'
+    return "ts"
 
 
 class TranslatorMessagePtrBase:
-    def __init__(self, tor: 'Translator', messageIndex: int) -> None:
-        self.tor: Final['Translator'] = tor
+    def __init__(self, tor: "Translator", messageIndex: int) -> None:
+        self.tor: Final["Translator"] = tor
         self.messageIndex: Final[int] = messageIndex
 
 
@@ -124,10 +130,12 @@ class TranslatorMessageIdPtr(TranslatorMessagePtrBase):
     def __hash__(self) -> int:
         return hash(self.tor.message(self.messageIndex).id())
 
-    def __eq__(self, other: 'TranslatorMessageIdPtr') -> bool:
-        message: TranslatorMessage = self.tor.message(self.messageIndex)
-        other_message: TranslatorMessage = other.tor.message(other.messageIndex)
-        return message.id() == other_message.id()
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TranslatorMessageIdPtr):
+            message: TranslatorMessage = self.tor.message(self.messageIndex)
+            other_message: TranslatorMessage = other.tor.message(other.messageIndex)
+            return message.id() == other_message.id()
+        return NotImplemented
 
 
 class TranslatorMessageContentPtr(TranslatorMessagePtrBase):
@@ -140,47 +148,54 @@ class TranslatorMessageContentPtr(TranslatorMessagePtrBase):
             h ^= hash(message.comment())
         return h
 
-    def __eq__(self, other: 'TranslatorMessageContentPtr') -> bool:
-        message: TranslatorMessage = self.tor.message(self.messageIndex)
-        other_message: TranslatorMessage = other.tor.message(other.messageIndex)
-        if message.context() != other_message.context() or message.sourceText() != other_message.sourceText():
-            return False
-        # Special treatment for context comments (empty source).
-        if not message.sourceText():
-            return True
-        return message.comment() == other_message.comment()
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TranslatorMessageContentPtr):
+            message: TranslatorMessage = self.tor.message(self.messageIndex)
+            other_message: TranslatorMessage = other.tor.message(other.messageIndex)
+            if (
+                message.context() != other_message.context()
+                or message.sourceText() != other_message.sourceText()
+            ):
+                return False
+            # Special treatment for context comments (empty source).
+            if not message.sourceText():
+                return True
+            return message.comment() == other_message.comment()
+        return NotImplemented
 
 
 class Translator:
     # registration of file formats
-    SaveFunction = Callable[['Translator', BinaryIO, ConversionData], bool]
-    LoadFunction = Callable[['Translator', BinaryIO, ConversionData], bool]
+    SaveFunction = Callable[["Translator", BinaryIO, ConversionData], bool]
+    LoadFunction = Callable[["Translator", BinaryIO, ConversionData], bool]
 
     class FileFormat:
-        def __init__(self):
+        def __init__(self) -> None:
             self.untranslatedDescription: str | None = None
             self.loader: Translator.LoadFunction | None = None
             self.saver: Translator.SaveFunction | None = None
             self.priority: int = -1  # 0 = highest, -1 = invisible
-            self.extension: str = ''  # such as "ts", "xlf"
+            self.extension: str = ""  # such as “ts,” “xlf”
 
-        def description(self):
-            """ human-readable description """
-            return FMT.tr(self.untranslatedDescription)
+        def description(self) -> QString:
+            """human-readable description"""
+            return FMT.tr(self.untranslatedDescription or "")
 
-        class FileType(enum.Enum):
-            TranslationSource = enum.auto()
-            TranslationBinary = enum.auto()
+        class FileType(Enum):
+            TranslationSource = auto()
+            TranslationBinary = auto()
 
-        fileType = FileType
+        fileType: FileType
 
-    _theFormats: list['Translator.FileFormat'] = []
+    _theFormats: list["Translator.FileFormat"] = []
 
     def __init__(self) -> None:
         self.m_messages: list[TranslatorMessage] = []
-        self.m_locationsType: Translator.LocationsType = Translator.LocationsType.AbsoluteLocations
-        
-        # A string beginning with a 2 or 3 letter language code (ISO 639-1
+        self.m_locationsType: Translator.LocationsType = (
+            Translator.LocationsType.AbsoluteLocations
+        )
+
+        # A string beginning with a 2 or 3-letter language code (ISO 639-1
         # or ISO-639-2), followed by the optional territory variant to distinguish
         # between territory-specific variations of the language. The language code
         # and territory code are always separated by '_'
@@ -189,22 +204,24 @@ class Translator:
         # 'pt'         portuguese, assumes portuguese from portugal
         # 'pt_BR'      Brazilian portuguese (ISO 639-1 language code)
         # 'por_BR'     Brazilian portuguese (ISO 639-2 language code)
-        self.m_language: str = ''
-        self.m_sourceLanguage: str = ''
+        self.m_language: str = ""
+        self.m_sourceLanguage: str = ""
         self.m_dependencies: list[str] = []
-        self.m_extra: Translator.ExtraData = dict()
+        self.m_extra: TranslatorMessage.ExtraData = dict()
         self.m_indexOk: bool = True
         self.m_ctxCmtIdx: dict[str, int] = dict()
         self.m_idMsgIdx: dict[str, int] = dict()
         self.m_msgIdx: dict[TMMKey, int] = dict()
 
-    def load(self, filename: Path, cd: ConversionData, fmt: str = 'auto') -> bool:
+    def load(self, filename: Path, cd: ConversionData, fmt: str = "auto") -> bool:
         cd.m_sourceDir = Path(filename).parent.absolute()
         cd.m_sourceFileName = str(filename)
 
         file: BinaryIO
         try:
-            with open(filename if (filename and filename != '-') else sys.stdin.fileno(), 'rb') as file:
+            with open(
+                filename if (filename and filename != "-") else sys.stdin.fileno(), "rb"
+            ) as file:
                 fmt_extension: str = guessFormat(filename, fmt)
 
                 f: Translator.FileFormat
@@ -212,18 +229,20 @@ class Translator:
                     if fmt_extension == f.extension:
                         if f.loader is not None:
                             return f.loader(self, file, cd)
-                        cd.appendError(f'No loader for format {fmt_extension} found')
+                        cd.appendError(f"No loader for format {fmt_extension} found")
                         return False
 
-            cd.appendError(f'Unknown format {fmt} for file {filename}')
+            cd.appendError(f"Unknown format {fmt} for file {filename}")
         except OSError as ex:
-            cd.appendError(f'Cannot open {filename}: {ex}')
+            cd.appendError(f"Cannot open {filename}: {ex}")
         return False
 
-    def save(self, filename: Path, cd: ConversionData, fmt: str = 'auto') -> bool:
+    def save(self, filename: Path, cd: ConversionData, fmt: str = "auto") -> bool:
         file: BinaryIO
         try:
-            with open(filename if (filename and filename != '-') else sys.stdin.fileno(), 'wb') as file:
+            with open(
+                filename if (filename and filename != "-") else sys.stdin.fileno(), "wb"
+            ) as file:
                 fmt_extension: str = guessFormat(filename, fmt)
                 cd.m_targetDir = Path(filename).parent.absolute()
 
@@ -232,12 +251,12 @@ class Translator:
                     if fmt_extension == f.extension:
                         if f.saver is not None:
                             return f.saver(self, file, cd)
-                        cd.appendError(f'Cannot save {fmt_extension} files')
+                        cd.appendError(f"Cannot save {fmt_extension} files")
                         return False
 
-            cd.appendError(f'Unknown format {fmt} for file {filename}')
+            cd.appendError(f"Unknown format {fmt} for file {filename}")
         except OSError as ex:
-            cd.appendError(f'Cannot create {filename}: {ex}')
+            cd.appendError(f"Cannot create {filename}: {ex}")
         return False
 
     @overload
@@ -245,35 +264,76 @@ class Translator:
         pass
 
     @overload
-    def find(self, context: str, comment: str, refs: TranslatorMessage.References) -> int:
+    def find(
+        self,
+        context: str,
+        comment: str,
+        refs: TranslatorMessage.References,
+    ) -> int:
         pass
 
     @overload
     def find(self, context: str) -> int:
         pass
 
-    def find(self, context_or_msg: str | TranslatorMessage,
-             comment: str = '', refs: TranslatorMessage.References = ()) -> int:
+    def find(self, *args: Any, **kwargs: Any) -> int:
+        if args:
+            if isinstance(args[0], TranslatorMessage) and "msg" not in kwargs:
+                kwargs["msg"] = args[0]
+            elif isinstance(args[0], str) and "context" not in kwargs:
+                kwargs["context"] = args[0]
+            else:
+                raise NotImplementedError
+            args = args[1:]
+        if args:
+            if isinstance(args[0], str) and "comment" not in kwargs:
+                kwargs["comment"] = args[0]
+            else:
+                raise NotImplementedError
+            args = args[1:]
+        if args:
+            if (
+                isinstance(args[0], TranslatorMessage.References)
+                and "refs" not in kwargs
+            ):
+                kwargs["refs"] = args[0]
+            else:
+                raise NotImplementedError
+            args = args[1:]
+        if args:
+            raise NotImplementedError
+        if set(kwargs.keys()) not in (
+            set(),
+            {"msg"},
+            {"context"},
+            {"context", "comment", "refs"},
+        ):
+            raise NotImplementedError
+
         i: int = -1
-        if isinstance(context_or_msg, TranslatorMessage):
-            msg: TranslatorMessage = context_or_msg
+        if "msg" in kwargs:
+            msg: TranslatorMessage = kwargs["msg"]
             self.ensureIndexed()
             if msg.id():
                 return self.m_msgIdx.get(TMMKey(msg), -1)
-            i: int = self.m_idMsgIdx.get(msg.id(), -1)
+            i = self.m_idMsgIdx.get(msg.id(), -1)
             if i >= 0:
                 return i
             i = self.m_msgIdx.get(TMMKey(msg), -1)
             # If both have an id, then find only by id.
             if i >= 0 and not self.m_messages[i].id():  # FIXME: id() is empty??
                 return i
-        elif isinstance(context_or_msg, str):
-            context: str = context_or_msg
-            if refs:
+        elif "context" in kwargs:
+            context: str = kwargs["context"]
+            if "comment" in kwargs and "refs" in kwargs:
+                comment: str = kwargs["comment"]
+                refs: TranslatorMessage.References = kwargs["refs"]
                 it: TranslatorMessage
                 for i, it in enumerate(self.m_messages):
                     if it.context() == context and it.comment() == comment:
-                        all_references: TranslatorMessage.References = it.allReferences()
+                        all_references: TranslatorMessage.References = (
+                            it.allReferences()
+                        )
                         it_ref: TranslatorMessage.Reference
                         for it_ref in all_references:
                             if it_ref in refs:
@@ -292,7 +352,9 @@ class Translator:
             self.m_messages[index] = msg
             self.addIndex(index, msg)
 
-    def extend(self, msg: TranslatorMessage, cd: ConversionData) -> None:  # Only for single-location messages
+    def extend(
+        self, msg: TranslatorMessage, cd: ConversionData
+    ) -> None:  # Only for single-location messages
         index: int = self.find(msg)
         if index == -1:
             self.append(msg)
@@ -303,17 +365,23 @@ class Translator:
                 emsg.setSourceText(msg.sourceText())
                 self.addIndex(index, msg)
             elif msg.sourceText() and emsg.sourceText() != msg.sourceText():
-                cd.appendError(f"Contradicting source strings for message with id '{emsg.id()}'.")
+                cd.appendError(
+                    f"Contradicting source strings for message with id '{emsg.id()}'."
+                )
                 return
             if not emsg.extras():
                 emsg.setExtras(msg.extras())
             elif msg.extras() and emsg.extras() != msg.extras():
                 if emsg.id():
-                    cd.appendError(f"Contradicting meta data for message with id '{emsg.id()}'.")
+                    cd.appendError(
+                        f"Contradicting meta data for message with id '{emsg.id()}'."
+                    )
                 else:
-                    cd.appendError(f"Contradicting meta data for message '{makeMsgId(msg)}'.")
+                    cd.appendError(
+                        f"Contradicting meta data for message '{makeMsgId(msg)}'."
+                    )
                 return
-            emsg.addReferenceUniq(msg.fileName(), msg.lineNumber())
+            emsg.addReferenceUniq(msg.fileName() or Path(), msg.lineNumber())
             if msg.extraComment():
                 cmt: str = emsg.extraComment()
                 if cmt:
@@ -334,9 +402,12 @@ class Translator:
             self.append(msg)
             return
 
-        best_idx: int = 0  # Best insertion point found so far
-        best_score: int = 0  # Its category: 0 = no hit, 1 = pre or post, 2 = middle
-        best_size: int = 0  # The length of the region. Longer is better within one category.
+        # Best insertion point found so far
+        best_idx: int = 0
+        # Its category: 0 = no hit, 1 = pre or post, 2 = middle
+        best_score: int = 0
+        # The length of the region. Longer is better within one category.
+        best_size: int = 0
 
         # The insertion point to use should this region turn out to be the best one so far
         this_idx: int = 0
@@ -347,7 +418,9 @@ class Translator:
         cur_idx: int = 0
         mit: TranslatorMessage
         for mit in self.m_messages:
-            same_file: bool = mit.fileName() == msg.fileName() and mit.context() == msg.context()
+            same_file: bool = (
+                mit.fileName() == msg.fileName() and mit.context() == msg.context()
+            )
             cur_line: int = mit.lineNumber()
             if same_file and cur_line >= prev_line:
                 if prev_line <= msg_line < cur_line:
@@ -359,7 +432,9 @@ class Translator:
                 if not this_score:
                     this_idx = cur_idx
                     this_score = 1
-                if this_score > best_score or (this_score == best_score and this_size > best_size):
+                if this_score > best_score or (
+                    this_score == best_score and this_size > best_size
+                ):
                     best_idx = this_idx
                     best_score = this_score
                     best_size = this_size
@@ -370,7 +445,9 @@ class Translator:
         if this_size and not this_score:
             this_idx = cur_idx
             this_score = 1
-        if this_score > best_score or (this_score == best_score and this_size > best_size):
+        if this_score > best_score or (
+            this_score == best_score and this_size > best_size
+        ):
             self.insert(this_idx, msg)
         elif best_score:
             self.insert(best_idx, msg)
@@ -380,7 +457,10 @@ class Translator:
     def stripObsoleteMessages(self) -> None:
         i: int = 0
         while i < len(self.m_messages):
-            if self.m_messages[i].type() in (TranslatorMessage.Type.Obsolete, TranslatorMessage.Type.Vanished):
+            if self.m_messages[i].type() in (
+                TranslatorMessage.Type.Obsolete,
+                TranslatorMessage.Type.Vanished,
+            ):
                 del self.m_messages[i]
                 self.m_indexOk = False
             else:
@@ -389,7 +469,7 @@ class Translator:
     def stripFinishedMessages(self) -> None:
         i: int = 0
         while i < len(self.m_messages):
-            if self.m_messages[i].type() in (TranslatorMessage.Type.Finished, ):
+            if self.m_messages[i].type() in (TranslatorMessage.Type.Finished,):
                 del self.m_messages[i]
                 self.m_indexOk = False
             else:
@@ -425,7 +505,9 @@ class Translator:
     def stripIdenticalSourceTranslations(self) -> None:
         i: int = 0
         while i < len(self.m_messages):
-            if list(self.m_messages[i].translations()) == [self.m_messages[i].sourceText()]:
+            if list(self.m_messages[i].translations()) == [
+                self.m_messages[i].sourceText()
+            ]:
                 del self.m_messages[i]
                 self.m_indexOk = False
             else:
@@ -436,11 +518,11 @@ class Translator:
         for message in self.m_messages:
             if message.type() == TranslatorMessage.Type.Finished:
                 message.setType(TranslatorMessage.Type.Unfinished)
-            message.setTranslation('')
+            message.setTranslation("")
 
     def dropUiLines(self) -> None:
-        ui_xt: Final[str] = '.ui'
-        jui_xt: Final[str] = '.jui'
+        ui_xt: Final[str] = ".ui"
+        jui_xt: Final[str] = ".jui"
         message: TranslatorMessage
         for message in self.m_messages:
             have: dict[Path, int] = dict()
@@ -457,7 +539,7 @@ class Translator:
             message.setReferences(refs)
 
     def makeFileNamesAbsolute(self, originalPath: Path) -> None:
-        """ Used by `lupdate` to be able to search using absolute paths during merging """
+        """Used by `lupdate` to be able to search using absolute paths during merging"""
         msg: TranslatorMessage
         for msg in self.m_messages:
             refs: TranslatorMessage.References = msg.allReferences()
@@ -467,7 +549,6 @@ class Translator:
                 msg.addReference(originalPath / Path(ref.fileName()), ref.lineNumber())
 
     def translationsExist(self) -> bool:
-        message: TranslatorMessage
         return any(message.isTranslated() for message in self.m_messages)
 
     class Duplicates(NamedTuple):
@@ -487,15 +568,18 @@ class Translator:
             got_dupe: bool = False
             if msg.id():
                 if TranslatorMessageIdPtr(self, i) in id_refs:
-                    ip: TranslatorMessageIdPtr = id_refs.intersection([TranslatorMessageIdPtr(self, i)]).pop()
+                    ip: TranslatorMessageIdPtr = id_refs.intersection(
+                        [TranslatorMessageIdPtr(self, i)]
+                    ).pop()
                     oi = ip.messageIndex
                     omsg = self.m_messages[oi]
                     p_dup = dups.byId
                     got_dupe = True
             if not got_dupe:
                 if TranslatorMessageContentPtr(self, i) in content_refs:
-                    cp: TranslatorMessageContentPtr \
-                        = content_refs.intersection([TranslatorMessageContentPtr(self, i)]).pop()
+                    cp: TranslatorMessageContentPtr = content_refs.intersection(
+                        [TranslatorMessageContentPtr(self, i)]
+                    ).pop()
                     oi = cp.messageIndex
                     omsg = self.m_messages[oi]
                     if not msg.id() or not omsg.id():
@@ -518,25 +602,29 @@ class Translator:
 
         return dups
 
-    def reportDuplicates(self, dupes: Duplicates, fileName: Path, verbose: bool) -> None:
+    def reportDuplicates(
+        self, dupes: Duplicates, fileName: Path, verbose: bool
+    ) -> None:
         if dupes.byId or dupes.byContents:
             sys.stderr.write(f"Warning: dropping duplicate messages in '{fileName}'")
             if not verbose:
-                sys.stderr.write('\n(try -verbose for more info).\n')
+                sys.stderr.write("\n(try -verbose for more info).\n")
             else:
-                sys.stderr.write(':\n')
+                sys.stderr.write(":\n")
                 i: int
                 for i in dupes.byId:
-                    sys.stderr.write(f'\n* ID: {self.message(i).id()}\n')
+                    sys.stderr.write(f"\n* ID: {self.message(i).id()}\n")
                 for i in dupes.byContents:
                     msg: TranslatorMessage = self.message(i)
-                    sys.stderr.write(f'\n* Context: {msg.context()}\n* Source: {msg.sourceText()}\n')
+                    sys.stderr.write(
+                        f"\n* Context: {msg.context()}\n* Source: {msg.sourceText()}\n"
+                    )
                     if msg.comment():
-                        sys.stderr.write(f'* Comment: {msg.comment()}\n')
+                        sys.stderr.write(f"* Comment: {msg.comment()}\n")
                     ts_line: int = msg.tsLineNumber()
                     if ts_line >= 0:
-                        sys.stderr.write(f'* Line in .ts File: {ts_line}\n')
-                sys.stderr.write('\n')
+                        sys.stderr.write(f"* Line in .ts File: {ts_line}\n")
+                sys.stderr.write("\n")
 
     def languageCode(self) -> str:
         return self.m_language
@@ -544,11 +632,11 @@ class Translator:
     def sourceLanguageCode(self) -> str:
         return self.m_sourceLanguage
 
-    class LocationsType(enum.Enum):
-        DefaultLocations = enum.auto()
-        NoLocations = enum.auto()
-        RelativeLocations = enum.auto()
-        AbsoluteLocations = enum.auto()
+    class LocationsType(Enum):
+        DefaultLocations = auto()
+        NoLocations = auto()
+        RelativeLocations = auto()
+        AbsoluteLocations = auto()
 
     def setLocationsType(self, lt: LocationsType) -> None:
         self.m_locationsType = lt
@@ -560,17 +648,24 @@ class Translator:
     def makeLanguageCode(language: QLocale.Language, territory: QLocale.Country) -> str:
         result: str = QLocale.languageToCode(language)
         if language != QLocale.Language.C and territory != QLocale.Country.AnyCountry:
-            result += '_'
+            result += "_"
             result += QLocale.territoryToCode(territory)
         return result
 
     @staticmethod
-    def languageAndTerritory(languageCode: str) -> tuple[QLocale.Language, QLocale.Country]:
-        if '_' in languageCode:
-            l: str
-            t: str
-            l, t = languageCode.split('_', maxsplit=1)  # "de_DE"
-            return QLocale.codeToLanguage(l), QLocale.codeToCountry(t)
+    def languageAndTerritory(
+        languageCode: str,
+    ) -> tuple[QLocale.Language, QLocale.Country]:
+        if "_" in languageCode:
+            language_code: str
+            territory_code: str
+            language_code, territory_code = languageCode.split(
+                "_", maxsplit=1
+            )  # "de_DE"
+            return (
+                QLocale.codeToLanguage(language_code),
+                QLocale.codeToCountry(territory_code),
+            )
         else:
             language: QLocale.Language = QLocale.codeToLanguage(languageCode)
             return language, QLocale(language).territory()
@@ -586,7 +681,7 @@ class Translator:
         fmt: Translator.FileFormat
         for fmt in Translator.registeredFileFormats():
             if filename.suffix.casefold() == fmt.extension.casefold():
-                filename = filename.with_suffix('')
+                filename = filename.with_suffix("")
                 break
         while filename.name:
             locale: QLocale = QLocale(filename.name)
@@ -595,13 +690,13 @@ class Translator:
                 # qDebug() << "FOUND " << locale.name();
                 return locale.name()
             if filename.suffix:
-                filename = filename.with_suffix('')
-            elif '_' in filename.name:
-                filename = filename.with_name(filename.name[:filename.name.index('_')])
+                filename = filename.with_suffix("")
+            elif "_" in filename.name:
+                filename = filename.with_name(filename.name[: filename.name.index("_")])
             else:
                 break
         # qDebug() << "LANGUAGE GUESSING UNSUCCESSFUL";
-        return ''
+        return ""
 
     def messages(self) -> list[TranslatorMessage]:
         return self.m_messages
@@ -611,12 +706,12 @@ class Translator:
         translations: list[str] = list(msg.translations())
         num_translations: int = numPlurals if msg.isPlural() else 1
 
-        # make sure that the string list always have the size of the
+        # make sure that the string list always has the size of the
         # language's current numerus, or 1 if it's not plural
         if len(translations) > num_translations:
-            translations = translations[:-(len(translations) - num_translations)]
+            translations = translations[: -(len(translations) - num_translations)]
         elif len(translations) < num_translations:
-            translations.extend([''] * (num_translations - len(translations)))
+            translations.extend([""] * (num_translations - len(translations)))
         return translations
 
     def normalizeTranslations(self, cd: ConversionData) -> None:
@@ -636,38 +731,38 @@ class Translator:
             ccnt: int = num_plurals if msg.isPlural() else 1
             if len(tlns) != ccnt:
                 if len(tlns) < ccnt:
-                    tlns.extend([''] * (ccnt - len(tlns)))
+                    tlns.extend([""] * (ccnt - len(tlns)))
                 elif len(tlns) > ccnt:
-                    tlns = tlns[:-(len(tlns) - ccnt)]
+                    tlns = tlns[: -(len(tlns) - ccnt)]
                     truncated = True
                 msg.setTranslations(tlns)
         if truncated:
-            cd.appendError("Removed plural forms as the target language has less "
-                           "forms.\nIf this sounds wrong, possibly the target language is "
-                           "not set or recognized.")
+            cd.appendError(
+                "Removed plural forms as the target language has less forms.\n"
+                "If this sounds wrong, possibly the target language is not set or recognized."
+            )
 
     def messageCount(self) -> int:
         return len(self.m_messages)
-    
+
     def message(self, i: int) -> TranslatorMessage:
         return self.m_messages[i]
-    
+
     def dump(self) -> None:
         msg: TranslatorMessage
         for msg in self.m_messages:
             msg.dump()
-    
+
     def setDependencies(self, dependencies: list[str]) -> None:
         self.m_dependencies = dependencies
-        
+
     def dependencies(self) -> list[str]:
         return self.m_dependencies
-    
+
     # additional file format specific data
     # note: use '<fileformat>:' as prefix for file format specific members,
     # e.g. "po-flags", "po-msgid_plural"
-    ExtraData = TranslatorMessage.ExtraData
-    
+
     def extra(self, key: str) -> str:
         return self.m_extra[key]
 
@@ -677,10 +772,10 @@ class Translator:
     def hasExtra(self, key: str) -> bool:
         return key in self.m_extra
 
-    def extras(self) -> ExtraData:
+    def extras(self) -> TranslatorMessage.ExtraData:
         return self.m_extra
 
-    def setExtras(self, extras: ExtraData) -> None:
+    def setExtras(self, extras: TranslatorMessage.ExtraData) -> None:
         self.m_extra = extras
 
     @staticmethod
@@ -689,7 +784,10 @@ class Translator:
         formats: list[Translator.FileFormat] = Translator.registeredFileFormats()
         i: int
         for i in range(len(formats)):
-            if fmt.fileType == formats[i].fileType and fmt.priority < formats[i].priority:
+            if (
+                fmt.fileType == formats[i].fileType
+                and fmt.priority < formats[i].priority
+            ):
                 formats.insert(i, fmt)
                 return
         formats.append(fmt)
@@ -697,10 +795,11 @@ class Translator:
     @staticmethod
     def registeredFileFormats() -> list[FileFormat]:
         return Translator._theFormats
-    
-    TextVariantSeparator = 0x2762  # some weird character nobody ever heard of :-D
-    BinaryVariantSeparator = 0x9c  # unicode "STRING TERMINATOR"
-    
+
+    # some weird character nobody ever heard of :-D
+    TextVariantSeparator: Final[str] = chr(0x2762)
+    BinaryVariantSeparator: Final[str] = chr(0x9C)  # unicode "STRING TERMINATOR"
+
     def insert(self, idx: int, msg: TranslatorMessage) -> None:
         if self.m_indexOk:
             if idx == len(self.m_messages):
@@ -708,7 +807,7 @@ class Translator:
             else:
                 self.m_indexOk = False
         self.m_messages.insert(idx, msg)
-    
+
     def addIndex(self, idx: int, msg: TranslatorMessage) -> None:
         if not msg.sourceText() and not msg.id():
             self.m_ctxCmtIdx[msg.context()] = idx
@@ -716,7 +815,7 @@ class Translator:
             self.m_msgIdx[TMMKey(msg)] = idx
             if msg.id():
                 self.m_idMsgIdx[msg.id()] = idx
-    
+
     def delIndex(self, idx: int) -> None:
         msg: TranslatorMessage = self.m_messages[idx]
         if not msg.sourceText() and not msg.id():
@@ -725,7 +824,7 @@ class Translator:
             self.m_msgIdx.pop(TMMKey(msg))
             if msg.id():
                 self.m_idMsgIdx.pop(msg.id())
-    
+
     def ensureIndexed(self) -> None:
         if not self.m_indexOk:
             self.m_indexOk = True
@@ -737,12 +836,12 @@ class Translator:
             for i, m in enumerate(self.m_messages):
                 self.addIndex(i, m)
 
-    TMM = list[TranslatorMessage]   
+    TMM = list[TranslatorMessage]
 
 
-'''
+"""
   This is a quick hack. The proper way to handle this would be
   to extend Translator's interface.
-'''
+"""
 
 ContextComment = "QT_LINGUIST_INTERNAL_CONTEXT_COMMENT"

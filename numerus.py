@@ -29,6 +29,7 @@ Q_GT: Final[int] = Q_NOT | Q_LEQ
 Q_GEQ: Final[int] = Q_NOT | Q_LT
 Q_NOT_BETWEEN: Final[int] = Q_NOT | Q_BETWEEN
 
+# fmt: off
 englishStyleRules: Final[bytes] = bytes([Q_EQ, 1])
 frenchStyleRules: Final[bytes] = bytes([Q_LEQ, 1])
 latvianRules: Final[bytes] = bytes([Q_MOD_10 | Q_EQ, 1, Q_AND, Q_MOD_100 | Q_NEQ, 11, Q_NEWRULE,
@@ -89,6 +90,7 @@ malteseForms: Final[list[str]] = ["Singular", "Paucal", "Greater Paucal", "Plura
 welshForms: Final[list[str]] = ["Nullar", "Singular", "Dual", "Sexal", "Plural"]
 arabicForms: Final[list[str]] = ["Nullar", "Singular", "Dual", "Minority Plural", "Plural", "Plural (100-102, ...)"]
 tagalogForms: Final[list[str]] = ["Singular", "Plural (consonant-ended)", "Plural (vowel-ended)"]
+# fmt: on
 
 japaneseStyleLanguages: Final[list[QLocale.Language]] = [
     QLocale.Language.Bislama,
@@ -204,7 +206,7 @@ englishStyleLanguages: Final[list[QLocale.Language]] = [
     QLocale.Language.Xhosa,
     QLocale.Language.Yiddish,
     QLocale.Language.Zulu,
-] + ([QLocale.Language.Nahuatl] if hasattr(QLocale.Language, 'Nahuatl') else [])
+] + ([QLocale.Language.Nahuatl] if hasattr(QLocale.Language, "Nahuatl") else [])
 frenchStyleLanguages: Final[list[QLocale.Language]] = [
     # keep synchronized with frenchStyleCountries
     QLocale.Language.Armenian,
@@ -215,12 +217,8 @@ frenchStyleLanguages: Final[list[QLocale.Language]] = [
     QLocale.Language.Tigrinya,
     QLocale.Language.Walloon,
 ]
-latvianLanguage: Final[list[QLocale.Language]] = [
-    QLocale.Language.Latvian
-]
-icelandicLanguage: Final[list[QLocale.Language]] = [
-    QLocale.Language.Icelandic
-]
+latvianLanguage: Final[list[QLocale.Language]] = [QLocale.Language.Latvian]
+icelandicLanguage: Final[list[QLocale.Language]] = [QLocale.Language.Icelandic]
 irishStyleLanguages: Final[list[QLocale.Language]] = [
     QLocale.Language.Divehi,
     QLocale.Language.Inuktitut,
@@ -267,7 +265,7 @@ frenchStyleCountries: Final[list[QLocale.Country]] = [
     QLocale.Country.Brazil,
     QLocale.Country.AnyCountry,
     QLocale.Country.AnyCountry,
-    QLocale.Country.AnyCountry
+    QLocale.Country.AnyCountry,
 ]
 
 
@@ -277,65 +275,161 @@ class NumerusTableEntry(NamedTuple):
     languages: list[QLocale.Language]
     countries: list[QLocale.Country]
     gettextRules: str
-    
+
     @property
     def rulesSize(self) -> int:
         return len(self.rules)
-    
+
 
 numerusTable: Final[list[NumerusTableEntry]] = [
-    NumerusTableEntry(b'', japaneseStyleForms, japaneseStyleLanguages, [], "nplurals=1; plural=0;"),
-    NumerusTableEntry(englishStyleRules, englishStyleForms, englishStyleLanguages, [], "nplurals=2; plural=(n != 1);"),
-    NumerusTableEntry(frenchStyleRules, frenchStyleForms, frenchStyleLanguages, frenchStyleCountries,
-                      "nplurals=2; plural=(n > 1);"),
-    NumerusTableEntry(latvianRules, latvianForms, latvianLanguage, [],
-                      "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n != 0 ? 1 : 2);"),
-    NumerusTableEntry(icelandicRules, icelandicForms, icelandicLanguage, [],
-                      "nplurals=2; plural=(n%10==1 && n%100!=11 ? 0 : 1);"),
-    NumerusTableEntry(irishStyleRules, irishStyleForms, irishStyleLanguages, [],
-                      "nplurals=3; plural=(n==1 ? 0 : n==2 ? 1 : 2);"),
-    NumerusTableEntry(gaelicStyleRules, gaelicStyleForms, gaelicStyleLanguages, [],
-                      "nplurals=4; plural=(n==1 || n==11) ? 0 : (n==2 || n==12) ? 1 : (n > 2 && n < 20) ? 2 : 3;"),
-    NumerusTableEntry(slovakStyleRules, slovakStyleForms, slovakStyleLanguages, [],
-                      "nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);"),
-    NumerusTableEntry(macedonianRules, macedonianForms, macedonianLanguage, [],
-                      "nplurals=3; plural=(n%100==1 ? 0 : n%100==2 ? 1 : 2);"),
-    NumerusTableEntry(lithuanianRules, lithuanianForms, lithuanianLanguage, [],
-                      "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);"),
-    NumerusTableEntry(russianStyleRules, russianStyleForms, russianStyleLanguages, [],
-                      "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : "
-                      "n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);"),
-    NumerusTableEntry(polishRules, polishForms, polishLanguage, [],
-                      "nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);"),
-    NumerusTableEntry(romanianRules, romanianForms, romanianLanguages, [],
-                      "nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);"),
-    NumerusTableEntry(slovenianRules, slovenianForms, slovenianLanguage, [],
-                      "nplurals=4; plural=(n%100==1 ? 0 : n%100==2 ? 1 : n%100==3 || n%100==4 ? 2 : 3);"),
-    NumerusTableEntry(malteseRules, malteseForms, malteseLanguage, [],
-                      "nplurals=4; plural=(n==1 ? 0 : "
-                      "(n==0 || (n%100>=1 && n%100<=10)) ? 1 : (n%100>=11 && n%100<=19) ? 2 : 3);"),
-    NumerusTableEntry(welshRules, welshForms, welshLanguage, [],
-                      "nplurals=5; plural=(n==0 ? 0 : n==1 ? 1 : (n>=2 && n<=5) ? 2 : n==6 ? 3 : 4);"),
-    NumerusTableEntry(arabicRules, arabicForms, arabicLanguage, [],
-                      "nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : "
-                      "(n%100>=3 && n%100<=10) ? 3 : n%100>=11 ? 4 : 5);"),
-    NumerusTableEntry(tagalogRules, tagalogForms, tagalogLanguage, [],
-                      "nplurals=3; plural=(n==1 ? 0 : (n%10==4 || n%10==6 || n%10== 9) ? 1 : 2);"),
+    NumerusTableEntry(
+        b"",
+        japaneseStyleForms,
+        japaneseStyleLanguages,
+        [],
+        "nplurals=1; plural=0;",
+    ),
+    NumerusTableEntry(
+        englishStyleRules,
+        englishStyleForms,
+        englishStyleLanguages,
+        [],
+        "nplurals=2; plural=(n != 1);",
+    ),
+    NumerusTableEntry(
+        frenchStyleRules,
+        frenchStyleForms,
+        frenchStyleLanguages,
+        frenchStyleCountries,
+        "nplurals=2; plural=(n > 1);",
+    ),
+    NumerusTableEntry(
+        latvianRules,
+        latvianForms,
+        latvianLanguage,
+        [],
+        "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n != 0 ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        icelandicRules,
+        icelandicForms,
+        icelandicLanguage,
+        [],
+        "nplurals=2; plural=(n%10==1 && n%100!=11 ? 0 : 1);",
+    ),
+    NumerusTableEntry(
+        irishStyleRules,
+        irishStyleForms,
+        irishStyleLanguages,
+        [],
+        "nplurals=3; plural=(n==1 ? 0 : n==2 ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        gaelicStyleRules,
+        gaelicStyleForms,
+        gaelicStyleLanguages,
+        [],
+        "nplurals=4; plural=(n==1 || n==11) ? 0 : (n==2 || n==12) ? 1 : (n > 2 && n < 20) ? 2 : 3;",
+    ),
+    NumerusTableEntry(
+        slovakStyleRules,
+        slovakStyleForms,
+        slovakStyleLanguages,
+        [],
+        "nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        macedonianRules,
+        macedonianForms,
+        macedonianLanguage,
+        [],
+        "nplurals=3; plural=(n%100==1 ? 0 : n%100==2 ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        lithuanianRules,
+        lithuanianForms,
+        lithuanianLanguage,
+        [],
+        "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        russianStyleRules,
+        russianStyleForms,
+        russianStyleLanguages,
+        [],
+        "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : "
+        "n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        polishRules,
+        polishForms,
+        polishLanguage,
+        [],
+        "nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        romanianRules,
+        romanianForms,
+        romanianLanguages,
+        [],
+        "nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100 > 0 && n%100 < 20)) ? 1 : 2);",
+    ),
+    NumerusTableEntry(
+        slovenianRules,
+        slovenianForms,
+        slovenianLanguage,
+        [],
+        "nplurals=4; plural=(n%100==1 ? 0 : n%100==2 ? 1 : n%100==3 || n%100==4 ? 2 : 3);",
+    ),
+    NumerusTableEntry(
+        malteseRules,
+        malteseForms,
+        malteseLanguage,
+        [],
+        "nplurals=4; plural=(n==1 ? 0 : "
+        "(n==0 || (n%100>=1 && n%100<=10)) ? 1 : (n%100>=11 && n%100<=19) ? 2 : 3);",
+    ),
+    NumerusTableEntry(
+        welshRules,
+        welshForms,
+        welshLanguage,
+        [],
+        "nplurals=5; plural=(n==0 ? 0 : n==1 ? 1 : (n>=2 && n<=5) ? 2 : n==6 ? 3 : 4);",
+    ),
+    NumerusTableEntry(
+        arabicRules,
+        arabicForms,
+        arabicLanguage,
+        [],
+        "nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : "
+        "(n%100>=3 && n%100<=10) ? 3 : n%100>=11 ? 4 : 5);",
+    ),
+    NumerusTableEntry(
+        tagalogRules,
+        tagalogForms,
+        tagalogLanguage,
+        [],
+        "nplurals=3; plural=(n==1 ? 0 : (n%10==4 || n%10==6 || n%10== 9) ? 1 : 2);",
+    ),
 ]
 
 
-def getNumerusInfo(language: QLocale.Language, country: QLocale.Country) -> tuple[bytes, list[str], str, bool]:
-    rules: bytes = b''
+def getNumerusInfo(
+    language: QLocale.Language,
+    country: QLocale.Country,
+) -> tuple[bytes, list[str], str, bool]:
+    rules: bytes = b""
     forms: list[str] = []
-    gettext_rules: str = ''
+    gettext_rules: str = ""
     while True:
         entry: NumerusTableEntry
         for entry in numerusTable:
             j: int
             for j in range(len(entry.languages)):
-                if (entry.languages[j] == language
-                        and ((not entry.countries and country == QLocale.Country.AnyCountry)
-                             or (entry.countries and entry.countries[j] == country))):
+                if entry.languages[j] == language and (
+                    (not entry.countries and country == QLocale.Country.AnyCountry)
+                    or (entry.countries and entry.countries[j] == country)
+                ):
                     rules = entry.rules
                     gettext_rules = entry.gettextRules
                     forms = list(entry.forms)
@@ -344,7 +438,7 @@ def getNumerusInfo(language: QLocale.Language, country: QLocale.Country) -> tupl
         if country == QLocale.Country.AnyCountry:
             break
         country = QLocale.Country.AnyCountry
-            
+
     return rules, forms, gettext_rules, False
 
 
@@ -354,15 +448,17 @@ def getNumerusInfoString() -> str:
     for entry in numerusTable:
         j: int
         for j in range(len(entry.languages)):
-            loc: QLocale = QLocale(entry.languages[j],
-                                   entry.countries[j] if entry.countries else QLocale.Country.AnyCountry)
+            loc: QLocale = QLocale(
+                entry.languages[j],
+                entry.countries[j] if entry.countries else QLocale.Country.AnyCountry,
+            )
             lang: str = QLocale.languageToString(entry.languages[j])
             if loc.language() == QLocale.Language.C:
-                lang += ' (!!!)'
+                lang += " (!!!)"
             elif entry.countries and entry.countries[j] != QLocale.Country.AnyCountry:
-                lang += f' ({QLocale.territoryToString(loc.territory())})'
+                lang += f" ({QLocale.territoryToString(loc.territory())})"
             else:
-                lang += f' [{QLocale.territoryToString(loc.territory())}]'
-            langs.append(f'{lang:<40} {loc.name():<8} {entry.gettextRules}')
+                lang += f" [{QLocale.territoryToString(loc.territory())}]"
+            langs.append(f"{lang:<40} {loc.name():<8} {entry.gettextRules}")
     langs.sort()
-    return '\n'.join(langs)
+    return "\n".join(langs)

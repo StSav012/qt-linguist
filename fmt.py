@@ -10,14 +10,17 @@ from qtpy.QtCore import QCoreApplication
 
 
 class QString(str):
-    def arg(self, *args: Any) -> 'QString':  # FIXME: consider formatting hints
+    def arg(self, *args: Any) -> "QString":  # FIXME: consider formatting hints
         s: QString = self
-        for i, a in reversed(list(enumerate(args, start=1))):  # FIXME: start from the first index used
-            s = s.replace(f'%{i}', str(a))
+        # FIXME: start from the first index used
+        for i, a in reversed(list(enumerate(args, start=1))):
+            s = QString(s.replace(f"%{i}", str(a)))
         return s
 
 
 class FMT:
     @staticmethod
-    def tr(sourceText: str, disambiguation: str = '', n: int = -1) -> QString:
-        return QString(QCoreApplication.translate('Linguist', sourceText, disambiguation, n))
+    def tr(sourceText: str, disambiguation: str = "", n: int = -1) -> QString:
+        return QString(
+            QCoreApplication.translate("Linguist", sourceText, disambiguation, n)
+        )

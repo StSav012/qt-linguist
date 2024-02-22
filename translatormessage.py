@@ -4,23 +4,23 @@
 
 from __future__ import annotations
 
-import enum
 import logging
+from enum import Enum, auto
 from pathlib import Path
-from typing import Sequence, overload
+from typing import Any, Sequence, overload
 
 
-class TranslatorSaveMode(enum.Enum):
-    SaveEverything = enum.auto()
-    SaveStripped = enum.auto()
+class TranslatorSaveMode(Enum):
+    SaveEverything = auto()
+    SaveStripped = auto()
 
 
 class TranslatorMessage:
-    class Type(enum.Enum):
-        Unfinished = enum.auto()
-        Finished = enum.auto()
-        Vanished = enum.auto()
-        Obsolete = enum.auto()
+    class Type(Enum):
+        Unfinished = auto()
+        Finished = auto()
+        Vanished = auto()
+        Obsolete = auto()
 
     ExtraData = dict[str, str]
 
@@ -29,8 +29,13 @@ class TranslatorMessage:
             self._file_name: Path = name
             self._line_number: int = line_number
 
-        def __eq__(self, other: 'TranslatorMessage.Reference') -> bool:
-            return self.fileName() == other.fileName() and self.lineNumber() == other.lineNumber()
+        def __eq__(self, other: object) -> bool:
+            if isinstance(other, TranslatorMessage.Reference):
+                return (
+                    self.fileName() == other.fileName()
+                    and self.lineNumber() == other.lineNumber()
+                )
+            return NotImplemented
 
         def fileName(self) -> Path:
             return self._file_name
@@ -40,22 +45,29 @@ class TranslatorMessage:
 
     References = list[Reference]
 
-    def __init__(self, context: str = '', sourceText: str = '',
-                 comment: str | None = '', userData: str = '',
-                 fileName: Path | None = None, lineNumber: int = -1,
-                 translations: Sequence[str] = (),
-                 type_: Type = Type.Unfinished, plural: bool = False) -> None:
-        self.m_id: str = ''
+    def __init__(
+        self,
+        context: str = "",
+        sourceText: str = "",
+        comment: str | None = "",
+        userData: str = "",
+        fileName: Path | None = None,
+        lineNumber: int = -1,
+        translations: Sequence[str] = (),
+        type_: Type = Type.Unfinished,
+        plural: bool = False,
+    ) -> None:
+        self.m_id: str = ""
         self.m_context: str = context
         self.m_sourcetext: str = sourceText
-        self.m_oldsourcetext: str = ''
-        self.m_comment: str = comment or ''
-        self.m_oldcomment: str = ''
+        self.m_oldsourcetext: str = ""
+        self.m_comment: str = comment or ""
+        self.m_oldcomment: str = ""
         self.m_userData: str = userData
         self.m_extra: TranslatorMessage.ExtraData = dict()  # PO flags, PO plurals
-        self.m_extraComment: str = ''
-        self.m_translatorComment: str = ''
-        self.m_warning: str = ''
+        self.m_extraComment: str = ""
+        self.m_translatorComment: str = ""
+        self.m_warning: str = ""
         self.m_translations: Sequence[str] = translations
         self.m_fileName: Path | None = fileName
         self.m_lineNumber: int = lineNumber
@@ -109,7 +121,7 @@ class TranslatorMessage:
         self.m_translations = translations
 
     def translation(self) -> str:
-        return self.m_translations[0] if self.m_translations else ''
+        return self.m_translations[0] if self.m_translations else ""
 
     def setTranslation(self, translation: str) -> None:
         self.m_translations = [translation]
@@ -164,17 +176,42 @@ class TranslatorMessage:
     def addReference(self, ref: Reference) -> None:
         pass
 
-    def addReference(self, fileName_or_ref: Path | Reference,
-                     lineNumber: int | None = None) -> None:
-        if isinstance(fileName_or_ref, Path) and lineNumber is not None:
-            if not self.m_fileName:
-                self.m_fileName = fileName_or_ref
-                self.m_lineNumber = lineNumber
+    def addReference(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            if isinstance(args[0], Path) and "fileName" not in kwargs:
+                kwargs["fileName"] = args[0]
+            elif (
+                isinstance(args[0], TranslatorMessage.Reference) and "ref" not in kwargs
+            ):
+                kwargs["ref"] = args[0]
             else:
-                self.m_extraRefs.append(TranslatorMessage.Reference(fileName_or_ref, lineNumber))
+                raise NotImplementedError
+            args = args[1:]
+        if args:
+            if isinstance(args[0], Path) and "lineNumber" not in kwargs:
+                kwargs["lineNumber"] = args[0]
+            else:
+                raise NotImplementedError
+            args = args[1:]
+        if args:
+            raise NotImplementedError
+        if set(kwargs.keys()) not in (set(), {"fileName", "lineNumber"}, {"ref"}):
+            raise NotImplementedError
 
-        elif isinstance(fileName_or_ref, TranslatorMessage.Reference):
-            self.addReference(fileName_or_ref.fileName(), fileName_or_ref.lineNumber())
+        if "fileName" in kwargs and "lineNumber" in kwargs:
+            file_name: Path = kwargs["fileName"]
+            line_number: int = kwargs["lineNumber"]
+            if not self.m_fileName:
+                self.m_fileName = file_name
+                self.m_lineNumber = line_number
+            else:
+                self.m_extraRefs.append(
+                    TranslatorMessage.Reference(file_name, line_number)
+                )
+
+        elif "ref" in kwargs:
+            ref: TranslatorMessage.Reference = kwargs["ref"]
+            self.addReference(ref.fileName(), ref.lineNumber())
 
         else:
             raise NotImplementedError
@@ -197,7 +234,10 @@ class TranslatorMessage:
 
     def allReferences(self) -> References:
         if self.m_fileName is not None:
-            return [TranslatorMessage.Reference(self.m_fileName, self.m_lineNumber), *self.m_extraRefs]
+            return [
+                TranslatorMessage.Reference(self.m_fileName, self.m_lineNumber),
+                *self.m_extraRefs,
+            ]
         return []
 
     def userData(self) -> str:
@@ -225,7 +265,11 @@ class TranslatorMessage:
         self.m_warning = warning
 
     def isNull(self) -> bool:
-        return not self.m_sourcetext and self.m_lineNumber == -1 and not self.m_translations
+        return (
+            not self.m_sourcetext
+            and self.m_lineNumber == -1
+            and not self.m_translations
+        )
 
     def type(self) -> Type:
         return self.m_type
@@ -240,7 +284,7 @@ class TranslatorMessage:
         self.m_plural = is_plural
 
     # note: use '<fileformat>:' as prefix for file format specific members,
-    # e.g. "po-msgid_plural"
+    # e.g. “po-msgid_plural”
 
     def extra(self, ba: str) -> str:
         return self.m_extra[ba]
@@ -267,22 +311,24 @@ class TranslatorMessage:
         self.m_warningOnly = isWarningOnly
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(id={self.m_id!r}, context={self.m_context!r}, ' \
-               f'source={self.m_sourcetext!r}, filename={self.m_fileName!s}, line={self.m_lineNumber})'
+        return (
+            f"{self.__class__.__name__}(id={self.m_id!r}, context={self.m_context!r}, "
+            f"source={self.m_sourcetext!r}, filename={self.m_fileName!s}, line={self.m_lineNumber})"
+        )
 
     def dump(self) -> None:
         logging.debug(
-            f'\nId                : {self.m_id}'
-            f'\nContext           : {self.m_context}'
-            f'\nSource            : {self.m_sourcetext}'
-            f'\nComment           : {self.m_comment}'
-            f'\nUserData          : {self.m_userData}'
-            f'\nExtraComment      : {self.m_extraComment}'
-            f'\nTranslatorComment : {self.m_translatorComment}'
-            f'\nTranslations      : {self.m_translations}'
-            f'\nFileName          : {self.m_fileName!s}'
-            f'\nLineNumber        : {self.m_lineNumber}'
-            f'\nType              : {self.m_type}'
-            f'\nPlural            : {self.m_plural}'
-            f'\nExtra             : {self.m_extra}'
+            f"\nId                : {self.m_id}"
+            f"\nContext           : {self.m_context}"
+            f"\nSource            : {self.m_sourcetext}"
+            f"\nComment           : {self.m_comment}"
+            f"\nUserData          : {self.m_userData}"
+            f"\nExtraComment      : {self.m_extraComment}"
+            f"\nTranslatorComment : {self.m_translatorComment}"
+            f"\nTranslations      : {self.m_translations}"
+            f"\nFileName          : {self.m_fileName!s}"
+            f"\nLineNumber        : {self.m_lineNumber}"
+            f"\nType              : {self.m_type}"
+            f"\nPlural            : {self.m_plural}"
+            f"\nExtra             : {self.m_extra}"
         )

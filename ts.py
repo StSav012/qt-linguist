@@ -20,130 +20,147 @@ from translatormessage import TranslatorMessage
 
 # Force python XML parser not faster C accelerators
 # because we can't hook the C implementation
-del sys.modules['_elementtree']
+# to make `LineNumberingParser`
+del sys.modules["_elementtree"]
 try:
     import xml.etree.ElementTree as et
 except ImportError:
     et = _et
-    
-    
+
+
 class ElementWithLocation(et.Element):
-    def __init__(self, tag: str | Callable[..., et.Element], **extra: str):
-        super().__init__(tag, **extra)
+    def __init__(
+        self,
+        tag: str,
+        attrib: dict[str, str] | None = None,
+        **extra: str,
+    ) -> None:
+        if attrib is None:
+            attrib = {}
+        super().__init__(tag, attrib, **extra)
 
         self.line_number: int = -1
         self.column_number: int = -1
-        self.loc: str = '-1:-1'
+        self.loc: str = "-1:-1"
 
 
 class LineNumberingParser(et.XMLParser):
     def _start(self, tag_name: str, attributes: list[str]) -> ElementWithLocation:
         # Here we assume the default XML parser which is expat
         # and copy its element position attrib into output Elements
-        element: ElementWithLocation = getattr(super(self.__class__, self), '_start')(tag_name, attributes)
+        element: ElementWithLocation = getattr(super(self.__class__, self), "_start")(
+            tag_name, attributes
+        )
         element.line_number = self.parser.CurrentLineNumber
         element.column_number = self.parser.CurrentColumnNumber
-        element.loc = f'{element.line_number}:{element.column_number}'
+        element.loc = f"{element.line_number}:{element.column_number}"
         return element
 
 
 def byteValue(value: str) -> str:
     base: int = 10
-    if value.startswith('x'):
+    if value.startswith("x"):
         base = 16
         value = value[1:]
     try:
         n: int = int(value, base)
     except ValueError:
-        return ''
+        return ""
     else:
         return chr(n)
 
 
 class TS:
-    class Tags(enum.StrEnum):
-        TS: Final[str] = 'TS'
-        dependencies: Final[str] = 'dependencies'
-        dependency: Final[str] = 'dependency'
-        context: Final[str] = 'context'
-        name: Final[str] = 'name'
-        message: Final[str] = 'message'
-        location: Final[str] = 'location'
-        comment: Final[str] = 'comment'
-        translator_comment: Final[str] = 'translator''comment'
-        old_comment: Final[str] = 'old''comment'
-        extra_comment: Final[str] = 'extra''comment'
-        numerus_form: Final[str] = 'numerus''form'
-        source: Final[str] = 'source'
-        old_source: Final[str] = 'old''source'
-        translation: Final[str] = 'translation'
-        userdata: Final[str] = 'userdata'
-        byte: Final[str] = 'byte'
-        length_variant: Final[str] = 'length''variant'
+    class Tags(StrEnum):
+        TS = "TS"
+        dependencies = "dependencies"
+        dependency = "dependency"
+        context = "context"
+        name = "name"
+        message = "message"
+        location = "location"
+        comment = "comment"
+        translator_comment = "translator" "comment"
+        old_comment = "old" "comment"
+        extra_comment = "extra" "comment"
+        numerus_form = "numerus" "form"
+        source = "source"
+        old_source = "old" "source"
+        translation = "translation"
+        userdata = "userdata"
+        byte = "byte"
+        length_variant = "length" "variant"
 
-    class Attributes(enum.StrEnum):
-        catalog: Final[str] = 'catalog'
-        filename: Final[str] = 'filename'
-        id: Final[str] = 'id'
-        language: Final[str] = 'language'
-        line: Final[str] = 'line'
-        numerus: Final[str] = 'numerus'
-        source_language: Final[str] = 'source''language'
-        type: Final[str] = 'type'
-        version: Final[str] = 'version'
-        encoding: Final[str] = 'encoding'
-        value: Final[str] = 'value'
-        variants: Final[str] = 'variants'
+    class Attributes(StrEnum):
+        catalog = "catalog"
+        filename = "filename"
+        id = "id"
+        language = "language"
+        line = "line"
+        numerus = "numerus"
+        source_language = "source" "language"
+        type = "type"
+        version = "version"
+        encoding = "encoding"
+        value = "value"
+        variants = "variants"
 
-    class Values(enum.StrEnum):
-        obsolete: Final[str] = 'obsolete'
-        unfinished: Final[str] = 'unfinished'
-        vanished: Final[str] = 'vanished'
-        yes: Final[str] = 'yes'
+    class Values(StrEnum):
+        obsolete = "obsolete"
+        unfinished = "unfinished"
+        vanished = "vanished"
+        yes = "yes"
 
     # prefix
-    prefix_extra: Final[str] = 'extra-'
+    prefix_extra: Final[str] = "extra-"
 
     def __init__(self, cd: ConversionData) -> None:
         self.m_cd: ConversionData = cd
 
-    # the "real thing"
+    # the “real thing”
     def read(self, dev: BinaryIO, translator: Translator) -> bool:
         current_line: dict[str, int] = dict()
-        current_file: str = ''
+        current_file: str = ""
         maybe_relative: bool = False
         maybe_absolute: bool = False
 
         def report_unexpected_tag(tag: ElementWithLocation) -> None:
-            self.m_cd.appendError(f'Unexpected message_tag <{tag.tag}> at {self.m_cd.m_sourceFileName}:{tag.loc}')
+            self.m_cd.appendError(
+                f"Unexpected message_tag <{tag.tag}> at {self.m_cd.m_sourceFileName}:{tag.loc}"
+            )
 
         def readContents(contents: ElementWithLocation) -> str:
-            """ needed to expand <byte ... /> """
-            result: str = contents.text or ''
+            """needed to expand <byte ... />"""
+            result: str = contents.text or ""
             tag: ElementWithLocation
             for tag in contents:
                 if tag.tag == TS.Tags.byte:
                     # <byte value="...">
-                    result += byteValue(contents.get(TS.Attributes.value)) + tag.tail.strip()
+                    result += (
+                        byteValue(contents.get(TS.Attributes.value) or "")
+                        + (tag.tail or "").strip()
+                    )
                     if len(tag):
-                        tok: str = et.tostring(tag, encoding='unicode')
+                        tok: str = et.tostring(tag, encoding="unicode")
                         if len(tok) > 30:
-                            tok = tok[:30] + '[...]'
-                        self.m_cd.appendError(f'Unexpected characters "{tok}" '
-                                              f'at {self.m_cd.m_sourceFileName}:{tag.loc}')
+                            tok = tok[:30] + "[...]"
+                        self.m_cd.appendError(
+                            f'Unexpected characters "{tok}" '
+                            f"at {self.m_cd.m_sourceFileName}:{tag.loc}"
+                        )
                         break
                 else:
                     report_unexpected_tag(tag)
                     break
             # qDebug() << "TEXT: " << result;
-            return result + contents.tail.strip()
+            return result + (contents.tail or "").strip()
 
         def readTransContents(trans_contents: ElementWithLocation) -> str:
-            """ needed to join <lengthvariant>s """
+            """needed to join <lengthvariant>s"""
             if trans_contents.get(TS.Attributes.variants) != TS.Values.yes:
                 return readContents(trans_contents)
 
-            result: str = ''
+            result: str = ""
             tag: ElementWithLocation
             for tag in trans_contents:
                 if tag.tag == TS.Tags.length_variant:
@@ -161,7 +178,7 @@ class TS:
             for tag in dependencies:
                 if tag.tag == TS.Tags.dependency:
                     # <dependency>
-                    deps.append(tag.get(TS.Attributes.catalog))
+                    deps.append(tag.get(TS.Attributes.catalog) or "")
                 else:
                     report_unexpected_tag(tag)
             return deps
@@ -175,9 +192,14 @@ class TS:
                 def readMessage(message: ElementWithLocation) -> TranslatorMessage:
                     nonlocal current_line, current_file, maybe_relative, maybe_absolute
 
+                    refs: TranslatorMessage.References = []
+                    current_msg_file: str = current_file
+
                     def readTranslation(translation: ElementWithLocation) -> list[str]:
                         translations: list[str] = []
-                        translation_type: str = translation.get(TS.Attributes.type)
+                        translation_type: str = (
+                            translation.get(TS.Attributes.type) or ""
+                        )
                         if translation_type == TS.Values.unfinished:
                             msg.setType(TranslatorMessage.Type.Unfinished)
                         elif translation_type == TS.Values.vanished:
@@ -189,7 +211,9 @@ class TS:
                             for translation_tag in translation:
                                 if translation_tag.tag == TS.Tags.numerus_form:
                                     # <numerusform>...</numerusform>
-                                    translations.append(readTransContents(translation_tag))
+                                    translations.append(
+                                        readTransContents(translation_tag)
+                                    )
                                 else:
                                     report_unexpected_tag(translation_tag)
                                     break
@@ -202,7 +226,7 @@ class TS:
                         nonlocal refs, current_msg_file
 
                         maybe_absolute = True
-                        file_name: str = location.get(TS.Attributes.filename)
+                        file_name: str = location.get(TS.Attributes.filename) or ""
                         if not file_name:
                             file_name = current_msg_file
                             maybe_relative = True
@@ -210,30 +234,36 @@ class TS:
                             if not refs:
                                 current_file = file_name
                             current_msg_file = file_name
-                        lin: str = location.get(TS.Attributes.line)
+                        lin: str = location.get(TS.Attributes.line) or ""
                         if not lin:
-                            refs.append(TranslatorMessage.Reference(Path(file_name), -1))
+                            refs.append(
+                                TranslatorMessage.Reference(Path(file_name), -1)
+                            )
                         else:
                             try:
                                 line_no: int = int(lin)
                             except ValueError:
                                 pass
                             else:
-                                if lin[0] in '+-':
-                                    current_line[file_name] = current_line.get(file_name, 0) + line_no
+                                if lin[0] in "+-":
+                                    current_line[file_name] = (
+                                        current_line.get(file_name, 0) + line_no
+                                    )
                                     line_no = current_line[file_name]
                                     maybe_relative = True
-                                refs.append(TranslatorMessage.Reference(Path(file_name), line_no))
+                                refs.append(
+                                    TranslatorMessage.Reference(
+                                        Path(file_name), line_no
+                                    )
+                                )
                         readContents(location)
 
-                    refs: TranslatorMessage.References = []
-                    current_msg_file: str = current_file
                     msg: TranslatorMessage = TranslatorMessage()
-                    msg.setId(message.get(TS.Attributes.id))
+                    msg.setId(message.get(TS.Attributes.id) or "")
                     msg.setContext(ctx)
                     msg.setType(TranslatorMessage.Type.Finished)
                     msg.setPlural(message.get(TS.Attributes.numerus) == TS.Values.yes)
-                    msg.setTsLineNumber(getattr(message, 'line_number', -1))
+                    msg.setTsLineNumber(getattr(message, "line_number", -1))
 
                     message_tag: ElementWithLocation
                     for message_tag in message:
@@ -272,12 +302,12 @@ class TS:
                     msg.setReferences(refs)
                     return msg
 
-                ctx: str = ''
+                ctx: str = ""
                 context_tag: ElementWithLocation
                 for context_tag in context:
                     if context_tag.tag == TS.Tags.name:
                         # <name>...</name>
-                        ctx = context_tag.text
+                        ctx = context_tag.text or ""
                     elif context_tag.tag == TS.Tags.message:
                         # <message>...</message>
                         translator.append(readMessage(context_tag))
@@ -285,13 +315,18 @@ class TS:
                         report_unexpected_tag(context_tag)
 
             # version: str = self().value(TS.Attributes.version)
-            translator.setLanguageCode(ts.get(TS.Attributes.language))
-            translator.setSourceLanguageCode(ts.get(TS.Attributes.source_language))
+            translator.setLanguageCode(ts.get(TS.Attributes.language) or "")
+            translator.setSourceLanguageCode(
+                ts.get(TS.Attributes.source_language) or ""
+            )
             tag: ElementWithLocation
             for tag in ts:
                 if tag.tag.startswith(TS.prefix_extra):
                     # <extra-...>...</extra-...>
-                    translator.setExtra(tag.tag[len(TS.prefix_extra):], readContents(tag))
+                    translator.setExtra(
+                        tag.tag[len(TS.prefix_extra) :],
+                        readContents(tag),
+                    )
                 elif tag.tag == TS.Tags.dependencies:
                     # <dependencies>
                     # <dependency catalog="qtsystems_no"/>
@@ -303,28 +338,41 @@ class TS:
                     readContext(tag)
                 else:
                     report_unexpected_tag(tag)
-                # if the file is empty adopt AbsoluteLocation (default location type for Translator)
+                # if the file is empty, adopt AbsoluteLocation (default location type for Translator)
                 if translator.messageCount() == 0:
                     maybe_absolute = True
-                translator.setLocationsType(Translator.LocationsType.RelativeLocations
-                                            if maybe_relative
-                                            else (Translator.LocationsType.AbsoluteLocations
-                                                  if maybe_absolute
-                                                  else Translator.LocationsType.NoLocations))
+                translator.setLocationsType(
+                    Translator.LocationsType.RelativeLocations
+                    if maybe_relative
+                    else (
+                        Translator.LocationsType.AbsoluteLocations
+                        if maybe_absolute
+                        else Translator.LocationsType.NoLocations
+                    )
+                )
             # </TS>
 
         try:
-            readTS(cast(ElementWithLocation, et.XML(dev.read(), parser=LineNumberingParser())))  # </TS>
+            readTS(
+                cast(
+                    ElementWithLocation,
+                    et.XML(dev.read(), parser=LineNumberingParser()),
+                )
+            )  # </TS>
         except et.ParseError as ex:
             self.m_cd.appendError(str(ex))
             return False
         return True
-    
+
     def write(self, dev: BinaryIO, translator: Translator) -> bool:
         def make_xml_doc() -> xml.dom.minidom.Document:
             doc: xml.dom.minidom.Document = xml.dom.minidom.Document()
 
-            def new_element(tag_name: str, text: str = '', **attrs: str) -> xml.dom.minidom.Element:
+            def new_element(
+                tag_name: str,
+                text: str = "",
+                **attrs: str,
+            ) -> xml.dom.minidom.Element:
                 element: xml.dom.minidom.Element = doc.createElement(tag_name)
                 if text:
                     element.appendChild(doc.createTextNode(text))
@@ -338,9 +386,12 @@ class TS:
             doc.appendChild(xml.dom.minidom.DocumentType(TS.Tags.TS))
             root: xml.dom.minidom.Element = new_element(
                 TS.Tags.TS,
-                **{TS.Attributes.version: "2.1",
-                   TS.Attributes.language: translator.languageCode(),
-                   TS.Attributes.source_language: translator.sourceLanguageCode()})
+                **{
+                    TS.Attributes.version: "2.1",
+                    TS.Attributes.language: translator.languageCode(),
+                    TS.Attributes.source_language: translator.sourceLanguageCode(),
+                },
+            )
             messages: dict[str, list[TranslatorMessage]] = {}
             msg: TranslatorMessage
             for msg in translator.messages():
@@ -354,26 +405,52 @@ class TS:
                 context: xml.dom.minidom.Element = doc.createElement(TS.Tags.context)
                 context.appendChild(new_element(TS.Tags.name, ctx))
                 for msg in messages[ctx]:
-                    message: xml.dom.minidom.Element = new_element(TS.Tags.message, **{TS.Attributes.id: msg.id()})
-                    if translator.locationsType() == Translator.LocationsType.RelativeLocations:
+                    message: xml.dom.minidom.Element = new_element(
+                        TS.Tags.message, **{TS.Attributes.id: msg.id()}
+                    )
+                    if (
+                        translator.locationsType()
+                        == Translator.LocationsType.RelativeLocations
+                    ):
                         for ref in msg.allReferences():
-                            message.appendChild(new_element(
-                                TS.Tags.location,
-                                **{TS.Attributes.filename: str(ref.fileName().relative_to(Path.cwd())),
-                                   TS.Attributes.line: str(ref.lineNumber())}))
-                    elif translator.locationsType() != Translator.LocationsType.NoLocations:
+                            message.appendChild(
+                                new_element(
+                                    TS.Tags.location,
+                                    **{
+                                        TS.Attributes.filename: str(
+                                            ref.fileName().relative_to(Path.cwd())
+                                        ),
+                                        TS.Attributes.line: str(ref.lineNumber()),
+                                    },
+                                )
+                            )
+                    elif (
+                        translator.locationsType()
+                        != Translator.LocationsType.NoLocations
+                    ):
                         for ref in msg.allReferences():
-                            message.appendChild(new_element(
-                                TS.Tags.location,
-                                **{TS.Attributes.filename: str(ref.fileName()),
-                                   TS.Attributes.line: str(ref.lineNumber())}))
+                            message.appendChild(
+                                new_element(
+                                    TS.Tags.location,
+                                    **{
+                                        TS.Attributes.filename: str(ref.fileName()),
+                                        TS.Attributes.line: str(ref.lineNumber()),
+                                    },
+                                )
+                            )
                     if msg.sourceText():
-                        message.appendChild(new_element(TS.Tags.source, msg.sourceText()))
+                        message.appendChild(
+                            new_element(TS.Tags.source, msg.sourceText())
+                        )
                     if msg.oldSourceText():
-                        message.appendChild(new_element(TS.Tags.old_source, msg.oldSourceText()))
+                        message.appendChild(
+                            new_element(TS.Tags.old_source, msg.oldSourceText())
+                        )
+                    translation_type: str = ""
                     if msg.isPlural() and msg.translations():
-                        translation: xml.dom.minidom.Element = new_element(TS.Tags.translation)
-                        translation_type: str = ''
+                        translation: xml.dom.minidom.Element = new_element(
+                            TS.Tags.translation
+                        )
                         if msg.type() == TranslatorMessage.Type.Unfinished:
                             translation_type = TS.Values.unfinished
                         elif msg.type() == TranslatorMessage.Type.Vanished:
@@ -382,54 +459,81 @@ class TS:
                             translation_type = TS.Values.obsolete
                         numerus_form: str
                         for numerus_form in msg.translations():
-                            translation.appendChild(new_element(TS.Tags.numerus_form, numerus_form,
-                                                                **{TS.Attributes.type: translation_type}))
+                            translation.appendChild(
+                                new_element(
+                                    TS.Tags.numerus_form,
+                                    numerus_form,
+                                    **{TS.Attributes.type: translation_type},
+                                )
+                            )
                         message.appendChild(translation)
                     else:
-                        translation_type: str = ''
                         if msg.type() == TranslatorMessage.Type.Unfinished:
                             translation_type = TS.Values.unfinished
                         elif msg.type() == TranslatorMessage.Type.Vanished:
                             translation_type = TS.Values.vanished
                         elif msg.type() == TranslatorMessage.Type.Obsolete:
                             translation_type = TS.Values.obsolete
-                        message.appendChild(new_element(TS.Tags.translation, msg.translation(),
-                                                        **{TS.Attributes.type: translation_type}))
+                        message.appendChild(
+                            new_element(
+                                TS.Tags.translation,
+                                msg.translation(),
+                                **{TS.Attributes.type: translation_type},
+                            )
+                        )
                     if msg.comment():
                         message.appendChild(new_element(TS.Tags.comment, msg.comment()))
                     if msg.oldComment():
-                        message.appendChild(new_element(TS.Tags.old_comment, msg.oldComment()))
+                        message.appendChild(
+                            new_element(TS.Tags.old_comment, msg.oldComment())
+                        )
                     if msg.userData():
-                        message.appendChild(new_element(TS.Tags.userdata, msg.userData()))
+                        message.appendChild(
+                            new_element(TS.Tags.userdata, msg.userData())
+                        )
                     if msg.extraComment():
-                        message.appendChild(new_element(TS.Tags.extra_comment, msg.extraComment()))
+                        message.appendChild(
+                            new_element(TS.Tags.extra_comment, msg.extraComment())
+                        )
                     if msg.translatorComment():
-                        message.appendChild(new_element(TS.Tags.translator_comment, msg.translatorComment()))
+                        message.appendChild(
+                            new_element(
+                                TS.Tags.translator_comment, msg.translatorComment()
+                            )
+                        )
                     if msg.extras():
                         me: str
                         for me in msg.extras():
-                            message.appendChild(new_element(TS.prefix_extra + me, msg.extra(me)))
+                            message.appendChild(
+                                new_element(TS.prefix_extra + me, msg.extra(me))
+                            )
                     context.appendChild(message)
                 root.appendChild(context)
 
             if translator.dependencies():
-                dependencies: xml.dom.minidom.Element = doc.createElement(TS.Tags.dependencies)
+                dependencies: xml.dom.minidom.Element = doc.createElement(
+                    TS.Tags.dependencies
+                )
                 dep: str
                 for dep in translator.dependencies():
-                    dependencies.appendChild(new_element(TS.Tags.dependency, **{TS.Attributes.catalog: dep}))
+                    dependencies.appendChild(
+                        new_element(TS.Tags.dependency, **{TS.Attributes.catalog: dep})
+                    )
                 root.appendChild(dependencies)
 
             if translator.extras():
                 te: str
                 for te in translator.extras():
-                    root.appendChild(new_element(TS.prefix_extra + te, translator.extra(te)))
+                    root.appendChild(
+                        new_element(TS.prefix_extra + te, translator.extra(te))
+                    )
 
             doc.appendChild(root)
 
             return doc
 
         try:
-            dev.write(make_xml_doc().toprettyxml(encoding='utf-8'))
+            dev.write(make_xml_doc().toprettyxml(encoding="utf-8"))
         except Exception as ex:
             self.m_cd.appendError(str(ex))
             return False
@@ -448,10 +552,10 @@ def loadTS(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
 
 def initTS() -> None:
     fmt: Translator.FileFormat = Translator.FileFormat()
-    fmt.extension = 'ts'
+    fmt.extension = "ts"
     fmt.fileType = Translator.FileFormat.FileType.TranslationSource
     fmt.priority = 0
-    fmt.untranslatedDescription = 'Qt translation sources'
+    fmt.untranslatedDescription = "Qt translation sources"
     fmt.loader = loadTS
     fmt.saver = saveTS
 
