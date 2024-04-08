@@ -68,7 +68,10 @@ def list_files(
 def find_translation_calls(
     filename: Path, base_path: Path
 ) -> Iterator[TranslatorMessage]:
-    m: ast.Module = ast.parse(source=filename.read_text(), filename=str(filename))
+    source: str = filename.read_text()
+    if source.startswith((chr(0xFEFF), chr(0xFFFE))):  # BOMs
+        source = source[1:]
+    m: ast.Module = ast.parse(source=source, filename=str(filename))
 
     import_translate_as: set[str] = set()
     import_qt_core_as: set[str] = set()
