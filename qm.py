@@ -8,7 +8,7 @@ import warnings
 from enum import IntEnum
 from typing import BinaryIO, Final, NamedTuple
 
-from qtpy.QtCore import QCoreApplication, QLocale
+from qtpy.QtCore import QByteArray, QCoreApplication, QDataStream, QLocale, QSysInfo
 
 from fmt import QString
 from numerus import getNumerusInfo
@@ -40,6 +40,15 @@ class Tag(IntEnum):
     Tag_Context = 7
     Tag_Comment = 8
     Tag_Obsolete2 = 9
+
+
+class QMTag(IntEnum):
+    Contexts = 0x2F
+    Hashes = 0x42
+    Messages = 0x69
+    NumerusRules = 0x88
+    Dependencies = 0x96
+    Language = 0xA7
 
 
 class Prefix(IntEnum):
@@ -413,16 +422,180 @@ def read8(data: bytes) -> int:
     return int.from_bytes(data[:1], "big")
 
 
-def read32(data: bytes) -> int:
-    return int.from_bytes(data[:4], "big")
+def read32(data: bytes, signed: bool = False) -> int:
+    return int.from_bytes(data[:4], "big", signed=signed)
 
 
-def fromBytes():
-    raise NotImplementedError  # TODO
+def fromBytes(data: bytes, length: int) -> tuple[str, bool]:
+    out: str = ""
+    utf8_fail: bool = False
+    try:
+        out = data[:length].decode(encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        utf8_fail = True
+    return out, utf8_fail
 
 
 def loadQM(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
-    raise NotImplementedError  # TODO
+    data: bytes = dev.read()
+    if not data.startswith(magic):
+        cd.appendError("QM-Format error: magic marker missing")
+        return False
+
+    # for squeezed but non-file data, this is what needs to be deleted
+    message_array: bytes = b""
+    offset_array: bytes = b""
+    offset_length: int = 0
+
+    ok: bool = True
+    utf8_fail: bool = False
+
+    data = data[len(magic) :]
+    tag: int
+
+    while len(data) > 4:
+        tag = read8(data)
+        data = data[1:]
+        block_length: int = read32(data)
+        # qDebug() << "TAG:" << tag <<  "BLOCK LEN:" << block_length
+        data = data[4:]
+        if not tag or not block_length:
+            break
+        if block_length > len(data):
+            ok = False
+            break
+
+        if tag == QMTag.Hashes:
+            offset_array = data
+            offset_length = block_length
+            # qDebug() << "HASHES: " << block_length << QByteArray((const char *)data, block_length).toHex()
+        elif tag == QMTag.Messages:
+            message_array = data
+            # qDebug() << "MESSAGES: " << block_length << QByteArray((const char *)data, block_length).toHex()
+        elif tag == QMTag.Dependencies:
+            dependencies: list[str] = []
+            stream: QDataStream = QDataStream(
+                QByteArray.fromRawData(data, block_length)
+            )
+            while not stream.atEnd():
+                dep: str = stream.readQString()
+                dependencies.append(dep)
+            translator.setDependencies(dependencies)
+        elif tag == QMTag.Language:
+            language: str
+            language, utf8_fail = fromBytes(data, block_length)
+            translator.setLanguageCode(language)
+
+        data = data[block_length:]
+
+    num_items: int = offset_length // 8
+    # qDebug() << "NUM ITEMS: " << num_items;
+
+    str_pro_n: str = "%n"
+    lang: QLocale.Language
+    country: QLocale.Country
+    lang, country = Translator.languageAndTerritory(translator.languageCode())
+    numerus_forms: list[str]
+    guess_plurals: bool = True
+    numerus_ok: bool
+    _, numerus_forms, _, numerus_ok = getNumerusInfo(lang, country)
+    if numerus_ok:
+        guess_plurals = len(numerus_forms) == 1
+
+    for start in range(0, num_items << 3, 8):
+        context: str = ""
+        source_text: str = ""
+        comment: str = ""
+        translations: list[str] = []
+
+        # hash: int = read32(offset_array[start])
+        ro: int = read32(offset_array[start + 4 :])
+        # qDebug() << "\nHASH:" << hash
+        m: bytes = message_array[ro:]
+
+        length: int
+        while m:
+            tag = read8(m)
+            m = m[1:]
+            # qDebug() << "Tag:" << tag << " ADDR: " << m
+            match tag:
+                case Tag.Tag_End:
+                    break
+                case Tag.Tag_Translation:
+                    length = read32(m, signed=True)
+                    assert length >= -1
+                    m = m[4:]
+
+                    # -1 indicates an empty string
+                    # Otherwise, streaming format is UTF-16 -> 2 bytes per character
+                    if length != -1 and length & 1:
+                        cd.appendError("QM-Format error")
+                        return False
+                    string: str = ""
+                    if length != -1:
+                        string_bytes: bytes = m[:length]
+                        if QSysInfo.Endian.ByteOrder == QSysInfo.Endian.LittleEndian:
+                            string_bytes = bytes(
+                                sum(
+                                    (
+                                        [string_bytes[i + 1], string_bytes[i]]
+                                        for i in range(0, len(string_bytes), 2)
+                                    ),
+                                    [],
+                                )
+                            )
+                        string = string_bytes.decode("utf-16le")
+                    translations.append(string)
+                    m = m[length:]
+                case Tag.Tag_Obsolete1:
+                    m = m[4:]
+                    # qDebug() << "OBSOLETE"
+                case Tag.Tag_SourceText:
+                    length = read32(m)
+                    m = m[4:]
+                    # qDebug() << "SOURCE LEN: " << length
+                    # qDebug() << "SOURCE: " << m[:length]
+                    source_text, utf8_fail = fromBytes(m, length)
+                    m = m[length:]
+                case Tag.Tag_Context:
+                    length = read32(m)
+                    m = m[4:]
+                    # qDebug() << "CONTEXT LEN: " << length
+                    # qDebug() << "CONTEXT: " << m[:length]
+                    context, utf8_fail = fromBytes(m, length)
+                    m = m[length:]
+                case Tag.Tag_Comment:
+                    length = read32(m)
+                    m = m[4:]
+                    # qDebug() << "COMMENT LEN: " << length
+                    # qDebug() << "COMMENT: " << m[:length]
+                    comment, utf8_fail = fromBytes(m, length)
+                    m = m[length:]
+                case _:
+                    # qDebug() << "UNKNOWN TAG" << tag
+                    pass
+
+        msg: TranslatorMessage = TranslatorMessage()
+        msg.setType(TranslatorMessage.Type.Finished)
+        if len(translations) > 1:
+            # If guess_plurals is not false here, plural form discard messages
+            # will be spewn out later.
+            msg.setPlural(True)
+        elif guess_plurals:
+            # This might cause false positives, so it is a fallback only.
+            if str_pro_n in source_text:
+                msg.setPlural(True)
+        msg.setTranslations(translations)
+        msg.setContext(context)
+        msg.setSourceText(source_text)
+        msg.setComment(comment)
+        translator.append(msg)
+
+    if utf8_fail:
+        cd.appendError("Error: File contains invalid UTF-8 sequences.")
+        return False
+
+    return ok
 
 
 def containsStripped(translator: Translator, msg: TranslatorMessage) -> bool:
