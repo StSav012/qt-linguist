@@ -531,7 +531,6 @@ def loadQM(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
                     if length != -1 and length & 1:
                         cd.appendError("QM-Format error")
                         return False
-                    string: str = ""
                     if length != -1:
                         string_bytes: bytes = m[:length]
                         if QSysInfo.Endian.ByteOrder == QSysInfo.Endian.LittleEndian:
@@ -544,9 +543,8 @@ def loadQM(translator: Translator, dev: BinaryIO, cd: ConversionData) -> bool:
                                     [],
                                 )
                             )
-                        string = string_bytes.decode("utf-16le")
-                    translations.append(string)
-                    m = m[length:]
+                        translations.append(string_bytes.decode("utf-16le"))
+                        m = m[length:]
                 case Tag.Tag_Obsolete1:
                     m = m[4:]
                     # qDebug() << "OBSOLETE"
