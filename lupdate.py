@@ -69,7 +69,7 @@ def find_translation_calls(
     filename: Path, base_path: Path
 ) -> Iterator[TranslatorMessage]:
     source: str = filename.read_text()
-    if source.startswith((chr(0xFEFF), chr(0xFFFE))):  # BOMs
+    if source.startswith(("\uFEFF", "\uFFFE")):  # BOMs
         source = source[1:]
     m: ast.Module = ast.parse(source=source, filename=str(filename))
 
