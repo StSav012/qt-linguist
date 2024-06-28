@@ -142,7 +142,7 @@ def find_translation_calls(
                     sourceText=(
                         cast(ast.Constant, operator.args[1]).value
                         if isinstance(operator.args[1], ast.Constant)
-                        else ast.unparse(cast(ast.stmt, operator.args[1]))
+                        else ""
                     ),
                     disambiguation=(
                         cast(ast.Constant, operator.args[2]).value
@@ -151,7 +151,11 @@ def find_translation_calls(
                         else (
                             ast.unparse(cast(ast.stmt, operator.args[2]))
                             if len(operator.args) > 2
-                            else ""
+                            else (
+                                ""
+                                if isinstance(operator.args[1], ast.Constant)
+                                else ast.unparse(cast(ast.stmt, operator.args[1]))
+                            )
                         )
                     ),
                     n=(
@@ -174,7 +178,7 @@ def find_translation_calls(
                     sourceText=(
                         cast(ast.Constant, operator.args[0]).value
                         if isinstance(operator.args[0], ast.Constant)
-                        else ast.unparse(cast(ast.stmt, operator.args[0]))
+                        else ""
                     ),
                     disambiguation=(
                         cast(ast.Constant, operator.args[1]).value
@@ -183,7 +187,11 @@ def find_translation_calls(
                         else (
                             ast.unparse(cast(ast.stmt, operator.args[1]))
                             if len(operator.args) > 1
-                            else ""
+                            else (
+                                ""
+                                if isinstance(operator.args[0], ast.Constant)
+                                else ast.unparse(cast(ast.stmt, operator.args[0]))
+                            )
                         )
                     ),
                     n=(
@@ -209,7 +217,7 @@ def find_translation_calls(
                     sourceText=(
                         cast(ast.Constant, operator.args[1]).value
                         if isinstance(operator.args[1], ast.Constant)
-                        else ast.unparse(cast(ast.stmt, operator.args[1]))
+                        else ""
                     ),
                     disambiguation=(
                         cast(ast.Constant, operator.args[2]).value
@@ -218,7 +226,11 @@ def find_translation_calls(
                         else (
                             ast.unparse(cast(ast.stmt, operator.args[2]))
                             if len(operator.args) > 2
-                            else ""
+                            else (
+                                ""
+                                if isinstance(operator.args[1], ast.Constant)
+                                else ast.unparse(cast(ast.stmt, operator.args[1]))
+                            )
                         )
                     ),
                     n=(
