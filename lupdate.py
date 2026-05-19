@@ -364,16 +364,20 @@ def find_translation_calls(
                     ):
                         for i_f in item_field:
                             yield from check_expression(i_f, class_name=class_name)
-                    elif all(
+                    elif sys.version_info >= (3, 10) and all(
                         isinstance(field_item, ast.match_case)
                         for field_item in item_field
                     ):
-                        pass  # see ast.Match below
+                        pass  # ast.Match
                     elif all(
                         isinstance(field_item, ast.withitem)
                         for field_item in item_field
                     ):
-                        pass  # see ast.AsyncWith & ast.With below
+                        pass  # ast.AsyncWith & ast.With
+                    elif sys.version_info >= (3, 12) and all(
+                        isinstance(field_item, ast.type_param) for field_item in item_field
+                    ):
+                        pass  # TypeVar
                     elif all(
                         isinstance(field_item, ast.alias) for field_item in item_field
                     ):
@@ -385,7 +389,7 @@ def find_translation_calls(
                             f"do not know what to do with {field} = {item_field} of statement {item}"
                         )
                 else:
-                    pass  # all the troubling statements are below
+                    pass
 
         return
 
