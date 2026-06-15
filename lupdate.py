@@ -336,6 +336,7 @@ def find_translation_calls(
                                         import_translate_as.add(l_el.id)
             elif isinstance(item, ast.ClassDef):
                 yield from walk_body(item.body, class_name=item.name)
+                continue
 
             field: str
             for field in getattr(item, "_fields", ()):
